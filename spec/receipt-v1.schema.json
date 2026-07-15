@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlighthouse.dev/spec/receipt-v1.schema.json",
+  "title": "AgentLighthouse Receipt v1",
+  "description": "A mediator-signed, hash-chained record of one mediated decision. MIT.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "seq", "ts", "actor", "action", "target", "verdict", "prev_hash", "record_hash", "sig"],
+  "properties": {
+    "v": { "type": "integer", "const": 1, "description": "Receipt schema version." },
+    "seq": { "type": "integer", "minimum": 0, "description": "Monotonic chain sequence number." },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 UTC timestamp, millisecond precision, trailing 'Z'."
+    },
+    "actor": {
+      "type": "string",
+      "description": "SPIFFE-style agent identity, e.g. spiffe://acme/agent/claude-code."
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "http_forward", "fetch", "llm_call", "mcp_tool_call", "mcp_tool_result",
+        "memory_read", "memory_write", "skill_load", "a2a_message", "config_change",
+        "killswitch"
+      ]
+    },
+    "target": { "type": "string", "description": "What the action was against, e.g. tool:send_email." },
+    "verdict": {
+      "type": "string",
+      "enum": ["block", "strip", "warn", "ask", "allow"],
+      "description": "Decision, in precedence order block > strip > warn > ask > allow."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scanner", "rule_id", "severity"],
+        "properties": {
+          "scanner": { "type": "string" },
+          "rule_id": { "type": "string" },
+          "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "owasp": { "type": "string", "description": "ASI01-ASI10 tag." },
+          "mitre": { "type": "string", "description": "MITRE ATT&CK technique id." }
+        }
+      }
+    },
+    "block_reason": {
+      "type": "string",
+      "description": "Fixed machine-readable reason vocabulary + retry hint (agent-legible denials)."
+    },
+    "policy_hash": { "type": "string", "description": "sha256:... of the policy in force." },
+    "redaction": {
+      "type": "object",
+      "description": "Redaction class -> count. Counts only; never plaintext.",
+      "additionalProperties": { "type": "integer", "minimum": 1 }
+    },
+    "session": {
+      "type": "string",
+      "description": "Agent session the decision belongs to (taint/HITL scope), when one exists."
+    },
+    "latency_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Milliseconds from request receipt to this decision (gateway actions)."
+    },
+    "prev_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "record_hash of the previous receipt; genesis is 64 zeros."
+    },
+    "record_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "SHA-256 over JCS(receipt without record_hash and sig)."
+    },
+    "sig": {
+      "type": "string",
+      "pattern": "^ed25519:[A-Za-z0-9+/]+={0,2}$",
+      "description": "Ed25519 signature (base64) over JCS(receipt without sig)."
+    }
+  }
+}

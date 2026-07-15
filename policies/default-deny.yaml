@@ -1,0 +1,35 @@
+# AgentLighthouse — default tool policy (L4, identity-bound, default-deny).
+#
+# Keyed on SPIFFE identity. A tool runs only if the identity has an explicit
+# allow rule AND the call's arguments satisfy that rule's constraints. Explicit
+# deny wins over allow. Unlisted identities fall through to `default` (deny-all).
+#
+# Argument constraints: allow_hosts (URL/host allowlist, "*.suffix" ok),
+# allow_prefixes / deny_prefixes (path, traversal-normalized), allow_values /
+# deny_values, max_len.
+
+agents:
+  "spiffe://acme/agent/claude-code":
+    allow:
+      - tool: http_fetch
+        args:
+          url:
+            allow_hosts: [docs.python.org, "*.internal"]
+      - tool: read_file
+        args:
+          path:
+            allow_prefixes: ["/workspace/"]
+            deny_prefixes: ["/etc/", "/secrets/", "/workspace/.git/"]
+      - tool: list_dir
+        args:
+          path:
+            allow_prefixes: ["/workspace/"]
+    deny:
+      - { tool: exec_shell }
+      - { tool: delete_file }
+    budgets:
+      max_tool_calls_per_min: 60
+
+  # Unknown identities: deny every tool (fail-closed default).
+  default:
+    allow: []

@@ -1,0 +1,1 @@
+"""AgentLighthouse CLI package."""

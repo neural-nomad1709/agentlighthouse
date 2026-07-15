@@ -1,0 +1,21 @@
+.venv/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+# Docker ignore patterns are root-anchored (unlike .gitignore), so reaching
+# frontend/ needs **/. The dashboard is built INSIDE the image from its
+# lockfile: host node_modules and a host-built dist must never leak into the
+# context (they would bloat it and could ship stale assets).
+**/node_modules/
+**/dist/
+**/*.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
+frontend/.playwright/
+data/
+keys/*_ed25519
+keys/*.pub
+.git/
+.env

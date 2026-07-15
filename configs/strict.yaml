@@ -1,0 +1,32 @@
+# Strict mode — tightest thresholds. No permissive settings permitted here.
+mode: strict
+env: dev
+listen: "0.0.0.0:8888"
+scanner:
+  dlp:
+    enabled: true
+  ssrf:
+    block_private: true
+    dns_rebind_protection: true
+  entropy:
+    path_threshold: 3.5
+    subdomain_threshold: 3.0
+  rate_limit:
+    per_domain_rps: 5
+  data_budget:
+    per_domain_bytes: 5242880
+  url_max_len: 4096
+gateway:
+  allow_hosts: []            # default-deny; add hosts deliberately
+  allow_ports: [443]         # strict: HTTPS only
+  require_identity: true
+  fetch_max_bytes: 1048576
+  max_redirects: 1
+  request_timeout_s: 15.0
+  pin_ttl_s: 120.0
+egress:
+  # auto = enforced when env: prod. ("enabled" would refuse to boot on any dev
+  # laptop with direct internet — set it only inside an isolated agent netns.)
+  bypass_self_test: auto
+  probe_targets: ["1.1.1.1:443", "8.8.8.8:53"]
+  probe_timeout_s: 3.0

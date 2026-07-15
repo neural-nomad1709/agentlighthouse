@@ -1,0 +1,30 @@
+# gVisor (runsc) optional runtime profile — Phase 8.
+#
+# Applies the gVisor user-space kernel to the AGENT workload only: agents run
+# untrusted code and hostile content, so they get the syscall sandbox; the
+# mediator keeps the native runtime (it is trusted, hardened, and needs real
+# network performance at the choke-point).
+#
+# Prerequisites (Linux host): install gVisor and register the runtime with
+# Docker (https://gvisor.dev/docs/user_guide/install/):
+#
+#   sudo apt-get install runsc          # or the release binary
+#   sudo runsc install                  # adds "runsc" to /etc/docker/daemon.json
+#   sudo systemctl reload docker
+#
+# Usage:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gvisor.yml up -d
+#
+# The one-shot probes still gate the agent on every `up`, so if gVisor's
+# network stack broke the topology proof you would see it before any agent
+# runs. This file must never touch networks, volumes, or the hardening
+# baseline — it only swaps the runtime (guarded by tests/test_hardening.py).
+
+services:
+  agent-sandbox:
+    runtime: runsc
+  agent-selftest:
+    runtime: runsc
+  agent-control-probe:
+    runtime: runsc

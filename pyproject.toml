@@ -1,0 +1,44 @@
+# AgentLighthouse — uv workspace root.
+# MIT-licensed throughout (see LICENSE.txt, also at license/LICENSE-MIT).
+# governance/ is a separate layer (governance/ imports core/, never the
+# reverse); that directory boundary stays enforced by test.
+[project]
+name = "agentlighthouse"
+version = "0.0.0"
+description = "AgentLighthouse — runtime security & governance plane for AI agents"
+authors = [{ name = "Amit Kala" }]
+requires-python = ">=3.12"
+dependencies = [
+    "al-core",
+    "al-verify",
+    "al-governance",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+al-core = { workspace = true }
+al-verify = { workspace = true }
+al-governance = { workspace = true }
+
+[tool.uv.workspace]
+members = ["core", "verify", "governance"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "detect-secrets>=1.5",
+    "httpx>=0.27",
+    "psycopg[binary]>=3.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["core", "verify", "governance"]
+addopts = "-ra"
+
+[tool.coverage.run]
+branch = true
+source = ["al_core", "al_verify", "al_governance"]

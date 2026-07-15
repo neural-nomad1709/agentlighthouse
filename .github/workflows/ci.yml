@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    name: test suite + release gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install the workspace
+        run: uv sync --frozen
+
+      - name: Test suite
+        run: uv run pytest -q
+
+      # The release gate. If this fails, there is no release.
+      - name: Release gate (tool-response injection, all 3 MCP transports)
+        run: make demo
+
+      - name: Memory guard demo
+        run: make demo-memory
+
+      - name: A2A demo
+        run: make demo-a2a
+
+  image:
+    name: image builds from a clean clone
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Proves the claim the README makes: a clone of this repository is
+      # sufficient to deploy. The default target bundles the prebuilt
+      # dashboard, so this also builds the frontend with no Node on the host.
+      - name: Build the image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

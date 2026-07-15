@@ -1,0 +1,34 @@
+# al-governance — multi-org governance layer (MIT). Depends on al-core; al-core
+# never depends on this.
+[project]
+name = "al-governance"
+version = "0.1.0"
+description = "AgentLighthouse governance: org tenancy, RBAC, budgets, signed posture attestation"
+authors = [{ name = "Amit Kala" }]
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "al-core",
+    "al-verify",
+    "cryptography>=43",
+    "fastapi>=0.111",
+    "typer>=0.12",
+    "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.2"]
+
+[project.scripts]
+al-gov = "al_governance.cli:app"
+
+[tool.uv.sources]
+al-core = { workspace = true }
+al-verify = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["al_governance"]

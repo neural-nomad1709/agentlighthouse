@@ -1,0 +1,25 @@
+# al-verify — standalone receipt verifier (MIT).
+# Minimal dependencies: a third party MUST be able to verify AgentLighthouse
+# evidence WITHOUT installing al-core. Only dependency is `cryptography` for
+# Ed25519; RFC 8785 (JCS) canonicalization and the hash chain are implemented
+# here from scratch so the trust surface is small and auditable.
+[project]
+name = "al-verify"
+version = "0.1.0"
+description = "Standalone, dependency-minimal verifier for AgentLighthouse receipts"
+authors = [{ name = "Amit Kala" }]
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "cryptography>=43",
+]
+
+[project.scripts]
+al-verify = "al_verify.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["al_verify"]

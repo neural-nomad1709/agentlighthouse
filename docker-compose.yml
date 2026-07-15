@@ -1,0 +1,175 @@
+# AgentLighthouse — Phase 1 compose (Edge Gate live).
+#
+# The network topology IS the security boundary (invariant #3, Level-1 "OS"
+# property):
+#
+#   agent-net   (internal: true)  agents live here; NO direct route to the world
+#                                  and NO route to control-net.
+#   egress-net                    al-core <-> the world (LLM providers, MCP, web).
+#   control-net                   admin API, dashboard, policy store, kill switch.
+#                                  Agents cannot reach it — enforced by topology.
+#
+# al-core is the mediator: it bridges agent-net and egress-net and runs the L1
+# gateway (fetch + OpenAI/Anthropic reverse proxy + MCP on :8443, CONNECT
+# forward proxy on :8080). Agents attach ONLY to agent-net and reach the world
+# through those two ports — nothing else routes (agent-net is internal; the
+# one-shot `agent-selftest` service proves it on every `up`).
+#
+# al-control is the control plane (admin API, kill switch, dashboard) on
+# control-net ONLY. Two one-shot probes gate the agent workload on every `up`:
+# `agent-selftest` (no out-of-band egress) and `agent-control-probe` (no route
+# to the control plane / kill switch). The kill switch crosses the boundary as
+# a sentinel FILE on a shared volume — never as a network path an agent could
+# reach.
+#
+# The hardened runtime baseline (invariant #9) is applied to every service via
+# the `x-hardened` anchor.
+
+x-hardened: &hardened
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  read_only: true
+  tmpfs: ["/tmp"]
+  pids_limit: 256
+  mem_limit: 1g
+  restart: unless-stopped
+
+networks:
+  agent-net:
+    internal: true
+  egress-net: {}
+  control-net: {}
+
+secrets:
+  mediator_signing_key:
+    file: ./keys/mediator_ed25519
+  admin_api_token:
+    file: ./keys/admin_api_token
+
+volumes:
+  al-data: {}          # data-plane evidence (al-core is its single writer)
+  al-control-data: {}  # control-plane evidence (al-control is its single writer)
+  al-killswitch: {}    # the ONE crossing point: a sentinel FILE, not a network path
+
+services:
+  al-core:
+    <<: *hardened
+    build: { context: ., dockerfile: Dockerfile }
+    image: agentlighthouse/al-core:0.1.0
+    command:
+      ["gateway", "--host", "0.0.0.0", "--port", "8443",
+       "--config", "configs/balanced.yaml"]
+    networks: [agent-net, egress-net, control-net]
+    secrets:
+      # pydantic-settings secrets carry the env prefix in the file name.
+      - source: admin_api_token
+        target: al_admin_api_token
+        uid: "10001"
+        mode: 0400
+    environment:
+      AL_ENV: dev
+      AL_MODE: balanced
+      # Dev stack: the key auto-generates 0600 on the Linux-native volume.
+      # (A Windows host cannot deliver /run/secrets with sane modes — bind
+      # mounts report 0777 and the fail-closed key policy refuses, correctly.)
+      # Prod (Linux host): mount the key via secrets with uid 10001 / mode 0400
+      # and point this at /run/secrets/mediator_signing_key.
+      AL_KEYS__SIGNING_KEY_PATH: /app/data/keys/mediator_ed25519
+      # Bind the CONNECT proxy on all interfaces so agent-net can reach it.
+      AL_GATEWAY__FORWARD_LISTEN: "0.0.0.0:8080"
+      # Watch the shared sentinel: the control plane engages the kill switch by
+      # writing a file here, so no agent-reachable path can ever trigger it.
+      AL_CONTROL__KILLSWITCH_DIR: /app/killswitch
+    volumes:
+      - al-data:/app/data
+      - al-killswitch:/app/killswitch
+    ports:
+      - "127.0.0.1:8443:8443"   # gateway (fetch + reverse proxy), host loopback
+    healthcheck:
+      # In-process health probe: one Runtime owns the ledger; a second `al
+      # healthz` boot against the same data dir would race the hash chain.
+      test:
+        ["CMD", "python", "-c",
+         "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8443/healthz', timeout=4).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # CONTROL PLANE — admin API + kill switch + evidence dashboard. Attached to
+  # control-net ONLY: agents have no route here (proved by agent-control-probe
+  # below). It owns its own ledger (control-plane evidence has its own single
+  # writer) and shares only the kill-switch sentinel volume with al-core.
+  al-control:
+    <<: *hardened
+    image: agentlighthouse/al-core:0.1.0
+    command: ["run", "--host", "0.0.0.0", "--port", "8888",
+              "--config", "configs/balanced.yaml"]
+    networks: [control-net]
+    secrets:
+      - source: admin_api_token
+        target: al_admin_api_token
+        uid: "10001"
+        mode: 0400
+    environment:
+      AL_ENV: dev
+      AL_MODE: balanced
+      AL_KEYS__SIGNING_KEY_PATH: /app/data/keys/mediator_ed25519
+      AL_CONTROL__KILLSWITCH_DIR: /app/killswitch
+      # Data-plane evidence for the dashboard: al-core's ledger, opened
+      # READ-ONLY by the evidence API (SQLite mode=ro). The mount itself is
+      # writable only because live WAL readers must update the -shm index;
+      # nothing on the control plane writes the chain or the mirror tables —
+      # al-core stays that chain's single writer.
+      AL_CONTROL__DATAPLANE_DIR: /app/dataplane
+    volumes:
+      - al-control-data:/app/data
+      - al-data:/app/dataplane
+      - al-killswitch:/app/killswitch
+    ports:
+      - "127.0.0.1:8898:8888"   # operator only, host loopback — never agent-net
+    depends_on: [al-core]
+
+  # One-shot L0 proof: runs the bypass self-test from INSIDE agent-net on every
+  # `up`. Exit 0 == no out-of-band egress (internal: true is actually in effect).
+  # If this service fails, the topology is broken — do not run agents on it.
+  agent-selftest:
+    image: agentlighthouse/al-core:0.1.0
+    command: ["egress", "selftest"]
+    networks: [agent-net]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    read_only: true
+    restart: "no"
+    depends_on: [al-core]
+
+  # One-shot SEGREGATION proof (Phase 5): from inside agent-net, try to reach
+  # the control plane + its kill switch. Both probes MUST fail to connect —
+  # exit 0 means "no route to control", which is the invariant. If this service
+  # fails, an agent could reach the admin API: do not run agents on it.
+  agent-control-probe:
+    image: agentlighthouse/al-core:0.1.0
+    command: ["egress", "selftest",
+              "--target", "al-control:8888",   # admin API + /api/killswitch
+              "--target", "al-control:8898"]
+    networks: [agent-net]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    read_only: true
+    restart: "no"
+    depends_on: [al-control]
+
+  # Placeholder agent workload — attached ONLY to agent-net; its only roads out
+  # are al-core's proxy ports. Real agents keep exactly these two env vars.
+  agent-sandbox:
+    <<: *hardened
+    image: alpine:3.20
+    networks: [agent-net]
+    environment:
+      HTTP_PROXY: "http://al-core:8080"
+      HTTPS_PROXY: "http://al-core:8080"
+    command: ["sleep", "infinity"]
+    depends_on:
+      al-core: { condition: service_started }
+      agent-selftest: { condition: service_completed_successfully }
+      agent-control-probe: { condition: service_completed_successfully }

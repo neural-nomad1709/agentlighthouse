@@ -1,0 +1,36 @@
+# Balanced mode — the default. Protections on; block-wins verdict precedence.
+# Secrets (admin_api_token) come from env / Docker secrets, never this file.
+mode: balanced
+env: dev
+listen: "0.0.0.0:8888"
+scanner:
+  dlp:
+    enabled: true
+  ssrf:
+    block_private: true
+    dns_rebind_protection: true
+  entropy:
+    path_threshold: 4.0
+    subdomain_threshold: 3.5
+  rate_limit:
+    per_domain_rps: 10
+  data_budget:
+    per_domain_bytes: 10485760
+  url_max_len: 8192
+gateway:
+  # Default-deny: agents reach ONLY these hosts ("*.example.com" = subdomains).
+  allow_hosts: []
+  allow_ports: [80, 443]
+  require_identity: true
+  # forward_listen defaults to "127.0.0.1:8080". Left unset here so deployments
+  # can override via env (AL_GATEWAY__FORWARD_LISTEN) — explicit YAML beats env.
+  fetch_max_bytes: 5242880
+  max_redirects: 3
+  request_timeout_s: 30.0
+  pin_ttl_s: 300.0
+  # Upstream provider keys come ONLY from env/secrets:
+  #   AL_GATEWAY__UPSTREAM__OPENAI_API_KEY / AL_GATEWAY__UPSTREAM__ANTHROPIC_API_KEY
+egress:
+  bypass_self_test: auto   # auto = enforced when env: prod
+  probe_targets: ["1.1.1.1:443", "8.8.8.8:53"]
+  probe_timeout_s: 3.0

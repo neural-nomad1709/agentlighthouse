@@ -1,0 +1,80 @@
+AgentLighthouse
+Copyright 2026 Amit Kala
+
+Created by Amit Kala
+
+This product includes software developed by Amit Kala.
+
+Licensing — MIT:
+  Every directory — core/, spec/, verify/, governance/, and frontend/ — is
+  licensed under the MIT License (see LICENSE.txt in the repository root, and
+  at license/LICENSE-MIT). governance/ remains a separate layer with the
+  dependency direction enforced by test (governance/ imports core/, never the
+  reverse), but that boundary is architectural now, not a licensing split.
+
+Container image licensing:
+  Both image targets are MIT:
+    (default)       core + the prebuilt fleet dashboard — a plain
+                    `docker build .` yields a working /dashboard with no
+                    Node on the host.
+    --target core   the Python core only, no dashboard:
+                    docker build --target core -t agentlighthouse/al-core:core .
+
+  Neither image contains the governance layer (governance/, `al-gov`): the
+  core never imports it and it runs on the control host.
+
+--------------------------------------------------------------------------------
+Attribution & influence
+--------------------------------------------------------------------------------
+Architecture influenced by:
+  - OWASP Agentic Top 10 (2026), OWASP GenAI Security Project
+  - OWASP Agent Memory Guard (AMG)
+
+This is an independent implementation. Reused open-source components are
+integrated as swappable adapters behind AgentLighthouse interfaces, version- and
+hash-pinned. Each reused component's license and attribution is retained here as
+it is introduced (MIT requires each component's own copyright and permission
+notice to be preserved).
+
+--------------------------------------------------------------------------------
+Reused open-source components
+--------------------------------------------------------------------------------
+Runtime dependencies (see uv.lock for exact pinned versions + hashes):
+  - cryptography          (Apache-2.0 OR BSD-3-Clause)   Ed25519 signing/verify
+  - pydantic, pydantic-settings  (MIT)                   config enforcement boundary
+  - fastapi, starlette    (MIT)                          control-plane API
+  - httpx, httpcore       (BSD-3-Clause)                 proxy + MCP HTTP client
+  - uvicorn               (BSD-3-Clause)                 ASGI server
+  - typer, click          (MIT / BSD-3-Clause)           CLI
+  - watchfiles            (MIT)                          config hot-reload
+  - pyyaml                (MIT)                          config parsing
+
+Optional runtime dependencies (extras):
+  - psycopg[binary]       (LGPL-3.0-or-later)            al-core[postgres]: the
+    concurrent-writer evidence mirror. Kept OPTIONAL and imported lazily so a
+    default (SQLite) deployment neither installs nor links it; AgentLighthouse
+    calls it across the standard DB-API/psycopg interface only.
+
+Dashboard (frontend/, built to static assets; Node is a build toolchain only):
+  - react, react-dom      (MIT)                          fleet dashboard UI
+  - vite, @vitejs/plugin-react, typescript  (MIT / Apache-2.0)   build toolchain
+  - @playwright/test      (Apache-2.0)                   dashboard e2e (dev only)
+
+Reference data:
+  - BIP-39 English wordlist (2048 words), from bitcoin/bips bip-0039/english.txt
+    (public-domain reference wordlist). Embedded verbatim in
+    core/al_core/detect/bip39_words.py for the seed-phrase scanner.
+
+Detection/memory adapters: as of Phase 7, AgentLighthouse ships **dependency-free
+baseline scanners** (regex + stdlib heuristics) behind the Scanner interface, so
+none of the named engines (LLM Guard, Gitleaks/detect-secrets, Presidio, OWASP
+AMG) are vendored or linked today, and none are listed here — an attribution for
+code we do not ship would be false. They remain swappable adapters behind the
+same interface; each will be added here, with its license, at the moment it is
+actually introduced.
+
+--------------------------------------------------------------------------------
+Trademark
+--------------------------------------------------------------------------------
+"AgentLighthouse" is a working name and must be cleared for trademark before any
+public release.

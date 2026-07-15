@@ -1,0 +1,12 @@
+# Audit mode — observe and record, do not break workflows. The ONLY mode in
+# which permissive settings (e.g. disabling a protection) are allowed, so teams
+# can tune false positives before enforcing. Never run audit mode in production.
+mode: audit
+env: dev
+listen: "0.0.0.0:8888"
+scanner:
+  dlp:
+    enabled: true
+  ssrf:
+    block_private: true
+    dns_rebind_protection: true
