@@ -16,6 +16,10 @@ dependencies = [
     "uvicorn>=0.30",
 ]
 
+[project.urls]
+Homepage = "https://github.com/neural-nomad1709/agentlighthouse"
+Repository = "https://github.com/neural-nomad1709/agentlighthouse"
+
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.2"]
 

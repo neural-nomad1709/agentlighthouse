@@ -5,6 +5,10 @@
   "description": "AgentLighthouse governance fleet dashboard. Built to static assets, served on control-net.",
   "author": "Amit Kala",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neural-nomad1709/agentlighthouse.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

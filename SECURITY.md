@@ -2,9 +2,9 @@
 
 ## Reporting a vulnerability
 
-Report it privately through GitHub's private vulnerability reporting — the
-repository's **Security** tab, then **Report a vulnerability**. Please do not
-open a public issue for a suspected vulnerability.
+Report it privately through [GitHub's private vulnerability reporting](https://github.com/neural-nomad1709/agentlighthouse/security/advisories/new)
+— the repository's **Security** tab, then **Report a vulnerability**. Please do
+not open a public issue for a suspected vulnerability.
 
 Include what you need to make the finding reproducible: the version or commit,
 the configuration profile (`audit` / `balanced` / `strict`), and the smallest

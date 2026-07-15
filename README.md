@@ -1,3 +1,5 @@
+![AgentLighthouse](assets/banner-1.png)
+
 # AgentLighthouse
 
 **The runtime security and governance plane for AI agents.**
@@ -12,11 +14,14 @@ independently verifiable evidence** of every decision it takes.
 ![Tests](https://img.shields.io/badge/tests-644-brightgreen.svg)
 ![Evidence](https://img.shields.io/badge/evidence-Ed25519%20%2B%20RFC%208785-informational.svg)
 ![Status](https://img.shields.io/badge/status-pilot%2Fdesign--partner-orange.svg)
+[![Docker Image](https://img.shields.io/badge/docker-amitkala%2Fagentlighthouse%3Av1.0-2496ED.svg?logo=docker&logoColor=white)](https://hub.docker.com/r/amitkala/agentlighthouse)
 
 > Runs on a laptop for evaluation; ships as a hardened, signed container for
 > production. Every claim in this document maps to a shipped, tested mechanism.
 > Where a capability is not yet delivered, it is named plainly in
 > [What This Does Not Do](#what-this-does-not-do).
+
+**Source:** <https://github.com/neural-nomad1709/agentlighthouse> &nbsp;·&nbsp; **Image:** `docker pull amitkala/agentlighthouse:v1.0`
 
 ---
 
@@ -460,12 +465,42 @@ it.
 
 ## Getting Started
 
+> For the complete, command-by-command walkthrough — installation, the full
+> configuration reference, identities and keys, integration modes, evidence
+> verification, governance, and troubleshooting — see the
+> [Implementation Guide](implementation.md). Every command there has been
+> executed and verified. This section is the fast path.
+
 ### Prerequisites
 
 - Python 3.12+ and [uv](https://docs.astral.sh/uv/) for the native workflow.
 - Docker (with Compose) for the container workflow.
 - Node is **not** required to run — the dashboard is prebuilt into the image and
   can be built separately only if you are developing the frontend.
+
+### Get the source
+
+```bash
+git clone https://github.com/neural-nomad1709/agentlighthouse.git
+cd agentlighthouse
+```
+
+### Get the published image (container)
+
+The hardened image — the core plus the prebuilt fleet dashboard, running
+non-root — is published to Docker Hub. Pull it by tag, or pin the digest for an
+immutable, tamper-evident reference:
+
+```bash
+docker pull amitkala/agentlighthouse:v1.0
+
+# immutable digest pin:
+docker pull amitkala/agentlighthouse@sha256:313453f3e50895f90140f5a275d1cd7b68cda39a51bcdccf02b8b823ac6c67f6
+```
+
+The repository's `docker-compose.yml` references this same image and wraps it in
+the full segregated topology (agent-net / egress-net / control-net, the kill
+switch, and the two boot probes) — see [Deployment Models](#deployment-models).
 
 ### Install and verify (native)
 
@@ -574,7 +609,9 @@ reference for any orchestration you build.
 ## Configuration and Rollout
 
 Three shipped modes select an enforcement posture, chosen with `--config`
-(explicit YAML beats environment variables):
+(explicit YAML beats environment variables). The annotated config files, the
+environment-variable reference, and the secrets model are in the
+[Implementation Guide](implementation.md#3-configuration-reference).
 
 | | audit | balanced (default) | strict |
 |---|---|---|---|

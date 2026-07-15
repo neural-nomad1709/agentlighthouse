@@ -55,7 +55,7 @@ services:
   al-core:
     <<: *hardened
     build: { context: ., dockerfile: Dockerfile }
-    image: agentlighthouse/al-core:0.1.0
+    image: amitkala/agentlighthouse:v1.0
     command:
       ["gateway", "--host", "0.0.0.0", "--port", "8443",
        "--config", "configs/balanced.yaml"]
@@ -102,7 +102,7 @@ services:
   # writer) and shares only the kill-switch sentinel volume with al-core.
   al-control:
     <<: *hardened
-    image: agentlighthouse/al-core:0.1.0
+    image: amitkala/agentlighthouse:v1.0
     command: ["run", "--host", "0.0.0.0", "--port", "8888",
               "--config", "configs/balanced.yaml"]
     networks: [control-net]
@@ -134,7 +134,7 @@ services:
   # `up`. Exit 0 == no out-of-band egress (internal: true is actually in effect).
   # If this service fails, the topology is broken — do not run agents on it.
   agent-selftest:
-    image: agentlighthouse/al-core:0.1.0
+    image: amitkala/agentlighthouse:v1.0
     command: ["egress", "selftest"]
     networks: [agent-net]
     security_opt: ["no-new-privileges:true"]
@@ -148,7 +148,7 @@ services:
   # exit 0 means "no route to control", which is the invariant. If this service
   # fails, an agent could reach the admin API: do not run agents on it.
   agent-control-probe:
-    image: agentlighthouse/al-core:0.1.0
+    image: amitkala/agentlighthouse:v1.0
     command: ["egress", "selftest",
               "--target", "al-control:8888",   # admin API + /api/killswitch
               "--target", "al-control:8898"]
