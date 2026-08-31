@@ -21,7 +21,12 @@ import secrets
 from dataclasses import dataclass
 from typing import Callable
 
+from typing import TYPE_CHECKING
+
 from ..gateway.decision import BlockReason, Decision, finding
+
+if TYPE_CHECKING:
+    from .store import CapabilityStore
 
 # Verb → irreversible if the tool name starts with one of these (or is listed
 # explicitly in ``extra_irreversible``). Irreversible = cannot be undone once
@@ -66,12 +71,29 @@ class HitlGate:
         timeout_s: float = 300.0,
         extra_irreversible: tuple[str, ...] = (),
         clock: Callable[[], float] | None = None,
+        store: "CapabilityStore | None" = None,
     ) -> None:
         self._timeout_s = timeout_s
         self._explicit = frozenset(t.lower() for t in extra_irreversible)
         import time
         self._clock = clock or time.monotonic
         self._pending: dict[str, ApprovalRequest] = {}
+        self._store = store
+        if store is not None:
+            # Rehydrate. The store keeps wall-clock ages; re-anchor each request
+            # in THIS process's clock preserving elapsed age, so the original
+            # deadline is enforced — persistence never extends a deadline.
+            now = self._clock()
+            for row in store.load_approvals():
+                self._pending[row["request_id"]] = ApprovalRequest(
+                    request_id=row["request_id"],
+                    actor=row["actor"],
+                    tool=row["tool"],
+                    created_at=now - row["age_s"],
+                    timeout_s=row["timeout_s"],
+                    status=row["status"],
+                    resolved_by=row["resolved_by"],
+                )
 
     # -- classification ------------------------------------------------------
 
@@ -95,6 +117,8 @@ class HitlGate:
             created_at=self._clock(), timeout_s=self._timeout_s,
         )
         self._pending[req.request_id] = req
+        if self._store is not None:
+            self._store.save_approval(req.request_id, actor, tool, req.timeout_s)
         return req
 
     def approve(self, request_id: str, *, by: str | None = None) -> bool:
@@ -112,6 +136,8 @@ class HitlGate:
         req.status = status
         req.resolved_at = self._clock()
         req.resolved_by = by
+        if self._store is not None:
+            self._store.resolve_approval(request_id, status, by)
         return True
 
     def _timed_out(self, req: ApprovalRequest) -> bool:

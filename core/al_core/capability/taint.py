@@ -15,6 +15,10 @@ receipt can explain the escalation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .store import CapabilityStore
 
 
 class TaintSource:
@@ -37,8 +41,15 @@ class TaintTracker:
     """Per-session taint state. Thread-safety is the caller's concern (the
     gateway serializes receipt writes; taint updates ride the same path)."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, store: CapabilityStore | None = None) -> None:
         self._sessions: dict[str, TaintState] = {}
+        self._store = store
+        if store is not None:
+            # Rehydrate: taint is monotonic within a session, and a restart
+            # must not launder it (that direction is fail-open).
+            for session_id, sources in store.load_taint().items():
+                self._sessions[session_id] = TaintState(
+                    tainted=True, sources=list(sources))
 
     def mark(self, session_id: str, source: str) -> None:
         """Taint ``session_id`` (idempotent per source)."""
@@ -46,6 +57,8 @@ class TaintTracker:
         state.tainted = True
         if source not in state.sources:
             state.sources.append(source)
+        if self._store is not None:
+            self._store.mark_taint(session_id, source)
 
     def is_tainted(self, session_id: str) -> bool:
         state = self._sessions.get(session_id)
@@ -59,6 +72,8 @@ class TaintTracker:
 
     def clear(self, session_id: str) -> None:
         self._sessions.pop(session_id, None)
+        if self._store is not None:
+            self._store.clear_taint(session_id)
 
 
 __all__ = ["TaintSource", "TaintState", "TaintTracker"]

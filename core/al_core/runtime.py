@@ -27,6 +27,7 @@ from .audit import Ledger
 from .capability.gate import ActionGate
 from .capability.hitl import HitlGate
 from .capability.policy import ToolPolicy
+from .capability.store import CapabilityStore
 from .capability.taint import TaintTracker
 from .config import ConfigManager, Settings
 from .config.watch import ConfigWatcher
@@ -133,11 +134,16 @@ class Runtime:
         self._budget = BudgetLedger(self._ledger.db)
 
         # L4 action gate: long-lived session state (taint/chain/HITL) plus the
-        # identity-bound tool policy loaded from YAML. Persistent so a session's
-        # taint and pending approvals survive config hot-reloads.
-        self._taint = TaintTracker()
+        # identity-bound tool policy loaded from YAML. Taint and pending
+        # approvals persist in SQLite next to the ledger mirror and rehydrate
+        # on boot: a restart must neither drop an in-flight approval nor
+        # launder a tainted session (deadlines stay anchored to the original
+        # submission — persistence never extends one).
+        self._capability_store = CapabilityStore(self._data_dir / "capability_state.db")
+        self._taint = TaintTracker(store=self._capability_store)
         self._chain = ChainDetector(gap_tolerance=settings.policy.chain_gap_tolerance)
-        self._hitl = HitlGate(timeout_s=settings.policy.hitl_timeout_s)
+        self._hitl = HitlGate(timeout_s=settings.policy.hitl_timeout_s,
+                              store=self._capability_store)
         self._pinner = ToolPinner(self._data_dir / "tool_pins.json")
         self._tool_policy = self._load_tool_policy(settings)
 
@@ -412,4 +418,5 @@ class Runtime:
 
     def close(self) -> None:
         self.stop_config_watch()
+        self._capability_store.close()
         self._ledger.close()
