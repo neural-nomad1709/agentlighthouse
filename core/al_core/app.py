@@ -163,6 +163,77 @@ def create_app(
             status = runtime.killswitch.disengage(actor=f"user:{p.subject}")
         return JSONResponse(status)
 
+    # -- HITL approvals (the operator side of the L4 gate) --------------------
+
+    @app.get("/api/approvals")
+    def api_approvals(request: Request) -> JSONResponse:
+        """Pending approval requests, with age and time-to-lapse. A lapsed
+        request never appears here: timeout is a denial, not a queue entry."""
+        p = _principal(request)
+        if p is None:
+            return _unauthorized()
+        gate = runtime.action_gate.hitl
+        rows = [{
+            "request_id": r.request_id,
+            "actor": r.actor,
+            "tool": r.tool,
+            "age_s": gate.age_s(r.request_id),
+            "remaining_s": gate.remaining_s(r.request_id),
+            "timeout_s": r.timeout_s,
+        } for r in gate.pending()]
+        return JSONResponse({"count": len(rows), "approvals": rows})
+
+    @app.post("/api/approvals/{request_id}")
+    async def api_resolve_approval(request: Request, request_id: str) -> JSONResponse:
+        """Resolve one pending approval (allow | deny). The resolving actor is
+        recorded on the request and in a signed receipt. A lapsed or already-
+        resolved request conflicts — existing semantics are preserved exactly:
+        a timed-out request cannot be resolved, timeout remains a denial."""
+        p = _principal(request)
+        if p is None:
+            return _unauthorized()
+        if not p.can("approve"):
+            return _forbidden("approve")
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001 — no body = no decision
+            body = {}
+        decision = body.get("decision")
+        if decision not in ("allow", "deny"):
+            return JSONResponse(
+                {"error": "invalid_decision", "detail": "decision must be 'allow' or 'deny'"},
+                status_code=422,
+            )
+        gate = runtime.action_gate.hitl
+        if gate.status(request_id) == "unknown":
+            return JSONResponse({"error": "not_found"}, status_code=404)
+        resolver = f"user:{p.subject}"
+        resolved = (gate.approve(request_id, by=resolver) if decision == "allow"
+                    else gate.deny(request_id, by=resolver))
+        if not resolved:
+            # lapsed (timeout is a denial) or already resolved
+            return JSONResponse(
+                {"error": "conflict", "status": gate.status(request_id)},
+                status_code=409,
+            )
+        from .gateway.decision import finding
+
+        allowed = decision == "allow"
+        runtime.record(
+            actor=resolver,
+            action="mcp_tool_call",
+            target=f"hitl:{request_id}",
+            verdict="allow" if allowed else "block",
+            block_reason=None if allowed else "HITL_DENIED",
+            findings=[finding("hitl", "hitl.approved" if allowed else "hitl.denied",
+                              "low" if allowed else "high", owasp="ASI09")],
+        )
+        return JSONResponse({
+            "request_id": request_id,
+            "status": gate.status(request_id),
+            "resolved_by": resolver,
+        })
+
     # -- read-only evidence API (org-scoped for every principal) --------------
 
     @app.get("/api/summary")

@@ -54,6 +54,7 @@ class ApprovalRequest:
     timeout_s: float
     status: str = _PENDING
     resolved_at: float | None = None
+    resolved_by: str | None = None
 
 
 class HitlGate:
@@ -96,13 +97,13 @@ class HitlGate:
         self._pending[req.request_id] = req
         return req
 
-    def approve(self, request_id: str) -> bool:
-        return self._resolve(request_id, _APPROVED)
+    def approve(self, request_id: str, *, by: str | None = None) -> bool:
+        return self._resolve(request_id, _APPROVED, by=by)
 
-    def deny(self, request_id: str) -> bool:
-        return self._resolve(request_id, _DENIED)
+    def deny(self, request_id: str, *, by: str | None = None) -> bool:
+        return self._resolve(request_id, _DENIED, by=by)
 
-    def _resolve(self, request_id: str, status: str) -> bool:
+    def _resolve(self, request_id: str, status: str, *, by: str | None = None) -> bool:
         req = self._pending.get(request_id)
         if req is None or req.status != _PENDING:
             return False
@@ -110,10 +111,23 @@ class HitlGate:
             return False  # already lapsed → cannot be resolved
         req.status = status
         req.resolved_at = self._clock()
+        req.resolved_by = by
         return True
 
     def _timed_out(self, req: ApprovalRequest) -> bool:
         return req.status == _PENDING and (self._clock() - req.created_at) >= req.timeout_s
+
+    def age_s(self, request_id: str) -> float | None:
+        """Seconds since the request was submitted (None for an unknown id)."""
+        req = self._pending.get(request_id)
+        return None if req is None else max(0.0, self._clock() - req.created_at)
+
+    def remaining_s(self, request_id: str) -> float | None:
+        """Seconds until the request lapses (0 once lapsed; None if unknown)."""
+        req = self._pending.get(request_id)
+        if req is None:
+            return None
+        return max(0.0, req.timeout_s - (self._clock() - req.created_at))
 
     def status(self, request_id: str) -> str:
         req = self._pending.get(request_id)

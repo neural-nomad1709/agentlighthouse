@@ -4,8 +4,8 @@ Commands: init, keygen, check, scan, db (init/stats), dashboard,
 policy (check/show), mcp (review),
 memory (put/get/list/snapshot/rollback/verify/quarantine), identity
 (issue/list), vkey (issue/list/revoke), egress (selftest/nftables), gateway,
-verify-receipt, healthz, run, version. More gates (killswitch, diagnose)
-arrive in later phases.
+verify-receipt, healthz, run, version, hitl (list/approve/deny). More gates
+(killswitch, diagnose) arrive in later phases.
 """
 
 from __future__ import annotations
@@ -45,6 +45,8 @@ killswitch_app = typer.Typer(help="L6 kill switch: engage/disengage full deny-al
 app.add_typer(killswitch_app, name="killswitch")
 learn_app = typer.Typer(help="Learning loop: mine rules, approve + sign, generate tests.")
 app.add_typer(learn_app, name="learn")
+hitl_app = typer.Typer(help="Pending HITL approvals: list and resolve (talks to the running control plane).")
+app.add_typer(hitl_app, name="hitl")
 skill_app = typer.Typer(help="Skill guard: screen + pin agent instruction files.")
 app.add_typer(skill_app, name="skill")
 
@@ -569,6 +571,57 @@ def killswitch_status(
     typer.echo(json.dumps(status, indent=2))
     if status["engaged"]:
         raise typer.Exit(3)
+
+
+def _hitl_client(url: str, token: str):
+    """HTTP client for the running control plane.
+
+    Unlike most verbs, ``al hitl`` cannot boot its own Runtime: pending
+    approvals live in the serving process's memory, so resolving one means
+    talking to that process over its API.
+    """
+    import httpx
+
+    return httpx.Client(
+        base_url=url,
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10.0,
+    )
+
+
+_HITL_URL = typer.Option("http://127.0.0.1:8888", "--url", help="control-plane base URL")
+_HITL_TOKEN = typer.Option(..., "--token", envvar="AL_ADMIN_API_TOKEN",
+                           help="API token (or set AL_ADMIN_API_TOKEN)")
+
+
+def _hitl_call(url: str, token: str, method: str, path: str, **kwargs):
+    with _hitl_client(url, token) as client:
+        response = client.request(method, path, **kwargs)
+    if response.status_code != 200:
+        raise _err(f"{path} -> {response.status_code}: {response.text}")
+    return response.json()
+
+
+@hitl_app.command("list")
+def hitl_list(url: str = _HITL_URL, token: str = _HITL_TOKEN) -> None:
+    """Pending approval requests, with age and time-to-lapse."""
+    typer.echo(json.dumps(_hitl_call(url, token, "GET", "/api/approvals"), indent=2))
+
+
+@hitl_app.command("approve")
+def hitl_approve(request_id: str, url: str = _HITL_URL, token: str = _HITL_TOKEN) -> None:
+    """Approve one pending request (receipted; the resolver is recorded)."""
+    payload = _hitl_call(url, token, "POST", f"/api/approvals/{request_id}",
+                         json={"decision": "allow"})
+    typer.secho(json.dumps(payload), fg=typer.colors.GREEN)
+
+
+@hitl_app.command("deny")
+def hitl_deny(request_id: str, url: str = _HITL_URL, token: str = _HITL_TOKEN) -> None:
+    """Deny one pending request (receipted; the resolver is recorded)."""
+    payload = _hitl_call(url, token, "POST", f"/api/approvals/{request_id}",
+                         json={"decision": "deny"})
+    typer.secho(json.dumps(payload), fg=typer.colors.YELLOW)
 
 
 def _boot_memory(config: Path | None, data_dir: Path):
