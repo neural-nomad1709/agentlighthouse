@@ -386,6 +386,12 @@ def default_scanners(settings) -> list:
         scanners.append(Bip39Scanner())
     if sc.pii.enabled:
         scanners.append(PiiScanner(action=sc.pii.action))
+    if sc.detect_secrets.enabled:
+        # Optional adapter (al-core[scanners]). Import failure surfaces at
+        # boot: an operator who enabled it must not run without it.
+        from .detect_secrets_adapter import DetectSecretsScanner
+
+        scanners.append(DetectSecretsScanner())
     if sc.ssrf.block_private:
         scanners.append(ContentSsrfScanner())
     scanners.append(EntropyScanner(

@@ -24,6 +24,7 @@ Homepage = "https://github.com/neural-nomad1709/agentlighthouse"
 Repository = "https://github.com/neural-nomad1709/agentlighthouse"
 
 [project.optional-dependencies]
+scanners = ["detect-secrets>=1.5"]
 # The concurrent-writer mirror (two mediators sharing one query surface).
 postgres = ["psycopg[binary]>=3.2"]
 

@@ -91,9 +91,19 @@ class DataBudgetConfig(BaseModel):
     per_domain_bytes: int = 10_485_760
 
 
+class DetectSecretsConfig(BaseModel):
+    """Optional detect-secrets adapter (install with ``al-core[scanners]``).
+    Opt-in: the library is an optional dependency, and enabling it without
+    the package installed refuses at boot rather than silently skipping."""
+
+    model_config = _STRICT
+    enabled: bool = False
+
+
 class ScannerConfig(BaseModel):
     model_config = _STRICT
     dlp: DlpConfig = DlpConfig()
+    detect_secrets: DetectSecretsConfig = DetectSecretsConfig()
     injection: InjectionConfig = InjectionConfig()
     pii: PiiConfig = PiiConfig()
     bip39: Bip39Config = Bip39Config()

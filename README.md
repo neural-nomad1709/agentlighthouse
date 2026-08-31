@@ -832,10 +832,14 @@ is a dated commitment.
 Read this before you trust it in production. This is the master honesty
 statement; the compliance mappings defer to it.
 
-- The named ML engines (LLM Guard, Presidio, detect-secrets) are **not shipped**.
-  The baseline scanners are dependency-free regex and heuristics behind the same
-  `Scanner` interface. Of LLM Guard's 24 scanners this covers four fully and four
-  partially, and none of the ML-judgement ones.
+- The named ML engines (LLM Guard, Presidio) are **not shipped**. The baseline
+  scanners are dependency-free regex and heuristics behind the same `Scanner`
+  interface. Of LLM Guard's 24 scanners this covers four fully and four
+  partially, and none of the ML-judgement ones. A **detect-secrets adapter**
+  ships behind that interface (opt-in: `al-core[scanners]` +
+  `scanner.detect_secrets.enabled: true`) — its curated keyword/format
+  detectors, not the noisy generic-entropy ones, and it is still pattern
+  matching, not ML judgement.
 - **A2A sender identity is asserted, not proven** — the mediator pins agent cards
   and binds sessions to their peer pair, but it does not cryptographically verify
   who a peer claims to be.
