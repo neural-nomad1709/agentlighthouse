@@ -58,7 +58,17 @@ tool (dependency: `cryptography` only).
 
 **Action vocabulary:** `http_forward`, `fetch`, `llm_call`, `mcp_tool_call`,
 `mcp_tool_result`, `memory_read`, `memory_write`, `skill_load`, `a2a_message`,
-`config_change`, `killswitch`.
+`config_change`, `killswitch`, `remote_exec`, `session_open`, `session_close`,
+`permission_request`.
+
+> `remote_exec`, `session_open`, `session_close`, `permission_request`
+> (added 2026-08-31, spec v1.1) carry the **remote-execution plane**: a host
+> application embedding `al_core` (e.g. access_control) that opens and closes
+> authenticated multi-hop sessions, runs catalogued operations on remote
+> estates, and files permission requests for gated ones. Additive, like
+> `skill_load` below: verification is over the canonical bytes plus the
+> signature, so every pre-existing receipt still verifies and an older
+> verifier checks the new receipts correctly without knowing the names.
 
 > `skill_load` (added 2026-07-12) covers an **agent instruction file** — a
 > `SKILL.md`, `CLAUDE.md`, `.cursorrules` or similar — being screened and pinned
