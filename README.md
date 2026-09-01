@@ -11,7 +11,7 @@ independently verifiable evidence** of every decision it takes.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)
-![Tests](https://img.shields.io/badge/tests-644-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-699-brightgreen.svg)
 ![Evidence](https://img.shields.io/badge/evidence-Ed25519%20%2B%20RFC%208785-informational.svg)
 ![Status](https://img.shields.io/badge/status-pilot%2Fdesign--partner-orange.svg)
 [![Docker Image](https://img.shields.io/badge/docker-amitkala%2Fagentlighthouse%3Av1.0-2496ED.svg?logo=docker&logoColor=white)](https://hub.docker.com/r/amitkala/agentlighthouse)
@@ -866,9 +866,10 @@ gap that is worse than described very much is.
 
 ## Testing
 
-- **644 automated tests** (`uv run pytest -q`): 632 pass in a standard
-  environment, with 12 Postgres-backed tests skipped unless a live-server DSN is
-  provided. A 9-test Playwright dashboard end-to-end suite lives in `frontend/`.
+- **711 automated tests** (`uv run pytest -q`): 699 pass in a standard
+  environment, with 12 skipped (Postgres-backed mirror tests unless a live-server
+  DSN is provided, plus Linux-only nftables/netns and POSIX-mode tests). A 9-test
+  Playwright dashboard end-to-end suite lives in `frontend/`.
 - The **three demos run as acceptance tests** in the suite, so a demo cannot rot
   silently; `make demo` is the CI release gate.
 - Selected tests are gated by platform or backend (Linux-only nftables netns
