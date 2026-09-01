@@ -1,13 +1,11 @@
-"""HITL approvals surface (AL-0.1) — the operator side of the L4 gate.
+"""The HITL approvals surface — the operator side of the L4 gate.
 
-`HitlGate` has held pending approvals since Phase 3, but nothing served them:
-no endpoint, no CLI verb. These tests specify the serving surface:
-
-  * ``GET /api/approvals`` — pending requests with actor/tool/age/deadline;
-  * ``POST /api/approvals/{id}`` — allow | deny, resolving actor recorded,
-    one signed receipt per resolution;
-  * existing semantics preserved exactly: a timed-out request cannot be
-    resolved, timeout remains a denial.
+  * ``GET /api/approvals`` — pending requests with actor/tool/age/deadline,
+    org-scoped like every other /api/* route;
+  * ``POST /api/approvals/{id}`` — allow | deny behind the ``approve``
+    capability and the caller's org scope; resolving actor recorded; one
+    signed receipt per resolution;
+  * a timed-out request cannot be resolved — timeout remains a denial.
 """
 
 from __future__ import annotations
@@ -27,11 +25,19 @@ VIEWER_TOKEN = "approvals-viewer-token"
 SHORT_TIMEOUT_YAML = "mode: balanced\npolicy:\n  hitl_timeout_s: 0.15\n"
 
 
+ACME_TOKEN = "approvals-acme-operator"
+BORG_TOKEN = "approvals-borg-operator"
+
+
 def _authenticator(token: str | None) -> Principal | None:
     if token == TOKEN:
         return Principal(subject="alice", role="admin", org=None)
     if token == VIEWER_TOKEN:
         return Principal(subject="watcher", role="viewer", org=None)
+    if token == ACME_TOKEN:
+        return Principal(subject="bob", role="operator", org="acme")
+    if token == BORG_TOKEN:
+        return Principal(subject="eve", role="operator", org="borg")
     return None
 
 
@@ -137,6 +143,41 @@ def test_denial_receipt_carries_block_verdict(client):
     resolution = next(r for r in receipts if r["target"] == f"hitl:{req.request_id}")
     assert resolution["verdict"] == "block"
     assert resolution["block_reason"] == "HITL_DENIED"
+
+
+# -- tenancy: approvals are org-scoped like every other /api/* route ----------------
+
+def test_a_tenant_sees_only_its_own_orgs_approvals(client):
+    gate = _hitl(client)
+    acme = gate.submit("spiffe://acme/agent/claude-code", "send_email")
+    borg = gate.submit("spiffe://borg/agent/other", "delete_backups")
+
+    rows = client.get("/api/approvals", headers=_auth(ACME_TOKEN)).json()["approvals"]
+    ids = {r["request_id"] for r in rows}
+    assert acme.request_id in ids
+    assert borg.request_id not in ids, "another tenant's queue leaked"
+
+    # the fleet admin (org=None) sees both
+    fleet = client.get("/api/approvals", headers=_auth()).json()["approvals"]
+    assert {acme.request_id, borg.request_id} <= {r["request_id"] for r in fleet}
+
+
+def test_a_tenant_cannot_resolve_another_orgs_request(client):
+    gate = _hitl(client)
+    borg = gate.submit("spiffe://borg/agent/other", "delete_backups")
+
+    # allow AND deny are both cross-tenant actions; existence is not leaked
+    for decision in ("allow", "deny"):
+        r = client.post(f"/api/approvals/{borg.request_id}",
+                        headers=_auth(ACME_TOKEN), json={"decision": decision})
+        assert r.status_code == 404, r.text
+    assert gate.status(borg.request_id) == "pending"
+
+    # its own org's operator can resolve it
+    r = client.post(f"/api/approvals/{borg.request_id}",
+                    headers=_auth(BORG_TOKEN), json={"decision": "deny"})
+    assert r.status_code == 200
+    assert gate.status(borg.request_id) == "denied"
 
 
 # -- guardrails --------------------------------------------------------------------

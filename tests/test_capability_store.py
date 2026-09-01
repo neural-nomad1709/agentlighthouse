@@ -1,13 +1,11 @@
-"""HITL + taint persistence (AL-0.2) — restart must not change any decision.
+"""HITL + taint persistence — a restart must not change any decision.
 
-`HitlGate._pending` and `TaintTracker._sessions` were process memory. A
-mediator restart dropped pending approvals (fail-closed but operationally
-painful) and — worse — cleared taint, a fail-open: taint is documented as
-monotonic within a session, and a restart silently broke that guarantee.
-
-These tests specify the SQLite store next to the ledger mirror: rehydrate on
-boot, deadlines enforced against the original submission time (persistence
-never extends a deadline), and both gates behave identically with no store.
+The invariants under test: a pending approval survives a restart with its
+original deadline (persistence never extends one, even across wall-clock
+steps); a tainted session stays tainted (taint is monotonic within a session);
+resolutions and lapses never rehydrate (fail-closed — receipts, not the state
+store, record what was decided); and both gates behave identically with no
+store attached.
 """
 
 from __future__ import annotations
@@ -48,41 +46,82 @@ def test_pending_request_survives_restart_with_identity_intact(store_path):
 
 
 def test_restart_never_extends_a_deadline(store_path):
-    gate = HitlGate(timeout_s=0.25, store=CapabilityStore(store_path))
+    gate = HitlGate(timeout_s=2.0, store=CapabilityStore(store_path))
     req = gate.submit("a", "send_email")
-    time.sleep(0.15)  # burn most of the deadline before the "restart"
+    time.sleep(0.5)  # burn part of the deadline before the "restart"
 
-    gate2 = HitlGate(timeout_s=0.25, store=reopened(store_path))
+    gate2 = HitlGate(timeout_s=2.0, store=reopened(store_path))
     remaining = gate2.remaining_s(req.request_id)
-    assert remaining is not None and remaining <= 0.11, (
-        f"deadline was extended across restart: {remaining}s left of 0.25s "
-        f"after 0.15s had already elapsed"
+    assert remaining is not None and remaining <= 1.55, (
+        f"deadline was extended across restart: {remaining}s left of 2.0s "
+        f"after 0.5s had already elapsed"
     )
-    time.sleep(0.12)  # past the ORIGINAL deadline
+    time.sleep(remaining + 0.1)  # past the ORIGINAL deadline
     assert gate2.status(req.request_id) == "timed_out"
     assert not gate2.approve(req.request_id)  # timeout remains a denial
 
 
-def test_lapsed_request_is_lapsed_after_restart(store_path):
+def test_lapsed_request_stays_a_denial_after_restart(store_path):
     gate = HitlGate(timeout_s=0.05, store=CapabilityStore(store_path))
     req = gate.submit("a", "send_email")
     time.sleep(0.08)
 
     gate2 = HitlGate(timeout_s=0.05, store=reopened(store_path))
-    assert gate2.status(req.request_id) == "timed_out"
     assert not gate2.approve(req.request_id)
+    assert not gate2.decision(req.request_id).allowed
+    assert gate2.pending() == []
 
 
-def test_resolution_survives_restart(store_path):
+def test_a_resolution_does_not_survive_a_restart(store_path):
+    """Only PENDING requests rehydrate. An approval that was never consumed
+    dies with the process — fail-closed, and it stops an approved request_id
+    from becoming a never-expiring allow-token across restarts. Receipts, not
+    the state store, are the record of what was resolved."""
     gate = HitlGate(timeout_s=100.0, store=CapabilityStore(store_path))
-    req = gate.submit("a", "delete_backups")
-    gate.deny(req.request_id, by="user:alice")
+    approved = gate.submit("a", "send_email")
+    denied = gate.submit("a", "delete_backups")
+    gate.approve(approved.request_id, by="user:alice")
+    gate.deny(denied.request_id, by="user:alice")
 
     gate2 = HitlGate(timeout_s=100.0, store=reopened(store_path))
-    assert gate2.status(req.request_id) == "denied"
-    assert not gate2.decision(req.request_id).allowed
-    # a resolved request cannot be re-resolved after a restart either
+    for req in (approved, denied):
+        assert gate2.status(req.request_id) == "unknown"
+        assert not gate2.decision(req.request_id).allowed
+        assert not gate2.approve(req.request_id)
+
+
+def test_the_store_prunes_what_will_never_rehydrate(store_path):
+    """Resolved rows are deleted on resolution and lapsed rows on the next
+    boot, so the table holds only live pending requests — a busy mediator must
+    not materialize its whole approval history on every start."""
+    store = CapabilityStore(store_path)
+    gate = HitlGate(timeout_s=0.05, store=store)
+    resolved = gate.submit("a", "send_email")
+    gate.deny(resolved.request_id, by="user:alice")
+    gate.submit("a", "send_email")  # will lapse
+    time.sleep(0.08)
+
+    assert len(store.load_approvals()) <= 1  # the lapsed row, at most
+    HitlGate(timeout_s=0.05, store=reopened(store_path))  # boot prunes lapsed
+    assert reopened(store_path).load_approvals() == []
+
+
+def test_a_backward_clock_step_fails_closed_not_open(store_path):
+    """Wall time can step backward (NTP correction, VM snapshot restore). A
+    submission that appears to come from the future is treated as lapsed —
+    never as a fresh deadline."""
+    store = CapabilityStore(store_path)
+    gate = HitlGate(timeout_s=300.0, store=store)
+    req = gate.submit("a", "send_email")
+    # simulate the clock stepping backward past the submission moment
+    with store._lock, store._conn:
+        store._conn.execute(
+            "UPDATE approvals SET created_at_wall = created_at_wall + 3600 "
+            "WHERE request_id = ?", (req.request_id,))
+
+    gate2 = HitlGate(timeout_s=300.0, store=reopened(store_path))
     assert not gate2.approve(req.request_id)
+    assert not gate2.decision(req.request_id).allowed
 
 
 # -- taint survives a restart (closes a fail-open) ---------------------------------

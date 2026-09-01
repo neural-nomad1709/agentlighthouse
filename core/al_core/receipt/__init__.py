@@ -29,9 +29,10 @@ from al_verify.verify import (
 RECEIPT_VERSION = 1
 
 # Action vocabulary — the closed set of mediated operations (see spec/receipt-v1.md).
-# The last four (v1.1, 2026-08-31) carry the remote-execution plane: an embedded
-# host (access_control) opening/closing authenticated sessions, running
-# catalogued operations, and requesting permission for gated ones.
+# remote_exec / session_open / session_close / permission_request carry the
+# remote-execution plane: an embedded host (access_control) opening and closing
+# authenticated sessions, running catalogued operations, and filing permission
+# requests for gated ones.
 Action = Literal[
     "http_forward",
     "fetch",

@@ -387,8 +387,9 @@ def default_scanners(settings) -> list:
     if sc.pii.enabled:
         scanners.append(PiiScanner(action=sc.pii.action))
     if sc.detect_secrets.enabled:
-        # Optional adapter (al-core[scanners]). Import failure surfaces at
-        # boot: an operator who enabled it must not run without it.
+        # Optional adapter (al-core[scanners]). Constructing it imports the
+        # library, so enabling it without the package refuses right here, at
+        # boot — an operator who asked for it must not run without it.
         from .detect_secrets_adapter import DetectSecretsScanner
 
         scanners.append(DetectSecretsScanner())

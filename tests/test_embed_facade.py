@@ -1,11 +1,10 @@
-"""The embedding facade (AL-0.4) — the one surface an embedder may import.
+"""The embedding facade — the one surface an embedder may import.
 
-`LighthouseGatekeeper` in access_control will embed an `al_core` Runtime.
-Before this module, the de-facto public API was whatever `Runtime` happened
-to expose. `al_core.embed` declares the contract: the Runtime, the gates, and
-the decision/result types. This test imports ONLY that surface and drives a
-full authorize / scan / record round-trip through it — if a rename breaks an
-embedder, it breaks here first.
+A host application (e.g. access_control's `LighthouseGatekeeper`) embeds an
+`al_core` Runtime through `al_core.embed`, which declares the contract: the
+Runtime, the gates, and the decision/result types. This test imports ONLY that
+surface and drives a full authorize / scan / record round-trip through it — if
+a rename breaks an embedder, it breaks here first.
 """
 
 from __future__ import annotations

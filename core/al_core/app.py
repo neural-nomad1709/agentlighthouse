@@ -168,10 +168,14 @@ def create_app(
     @app.get("/api/approvals")
     def api_approvals(request: Request) -> JSONResponse:
         """Pending approval requests, with age and time-to-lapse. A lapsed
-        request never appears here: timeout is a denial, not a queue entry."""
+        request never appears here: timeout is a denial, not a queue entry.
+        Org-scoped like every other /api/* route: a tenant sees only requests
+        filed by its own org's actors."""
         p = _principal(request)
         if p is None:
             return _unauthorized()
+        from .audit.db import org_of
+
         gate = runtime.action_gate.hitl
         rows = [{
             "request_id": r.request_id,
@@ -180,7 +184,7 @@ def create_app(
             "age_s": gate.age_s(r.request_id),
             "remaining_s": gate.remaining_s(r.request_id),
             "timeout_s": r.timeout_s,
-        } for r in gate.pending()]
+        } for r in gate.pending() if p.scope is None or org_of(r.actor) == p.scope]
         return JSONResponse({"count": len(rows), "approvals": rows})
 
     @app.post("/api/approvals/{request_id}")
@@ -204,8 +208,14 @@ def create_app(
                 {"error": "invalid_decision", "detail": "decision must be 'allow' or 'deny'"},
                 status_code=422,
             )
+        from .audit.db import org_of
+
         gate = runtime.action_gate.hitl
-        if gate.status(request_id) == "unknown":
+        req = gate.request(request_id)
+        if req is None:
+            return JSONResponse({"error": "not_found"}, status_code=404)
+        if p.scope is not None and org_of(req.actor) != p.scope:
+            # another tenant's request is *not found*, never leaked
             return JSONResponse({"error": "not_found"}, status_code=404)
         resolver = f"user:{p.subject}"
         resolved = (gate.approve(request_id, by=resolver) if decision == "allow"

@@ -80,9 +80,12 @@ class HitlGate:
         self._pending: dict[str, ApprovalRequest] = {}
         self._store = store
         if store is not None:
-            # Rehydrate. The store keeps wall-clock ages; re-anchor each request
-            # in THIS process's clock preserving elapsed age, so the original
-            # deadline is enforced — persistence never extends a deadline.
+            # Rehydrate PENDING requests only. The store keeps wall-clock ages;
+            # re-anchor each in THIS process's clock preserving elapsed age, so
+            # the original deadline is enforced. The store drops lapsed and
+            # from-the-future rows itself (fail closed), and resolutions never
+            # persist — an unconsumed approval dies with the process rather
+            # than becoming a replayable allow-token.
             now = self._clock()
             for row in store.load_approvals():
                 self._pending[row["request_id"]] = ApprovalRequest(
@@ -91,8 +94,6 @@ class HitlGate:
                     tool=row["tool"],
                     created_at=now - row["age_s"],
                     timeout_s=row["timeout_s"],
-                    status=row["status"],
-                    resolved_by=row["resolved_by"],
                 )
 
     # -- classification ------------------------------------------------------
@@ -154,6 +155,10 @@ class HitlGate:
         if req is None:
             return None
         return max(0.0, req.timeout_s - (self._clock() - req.created_at))
+
+    def request(self, request_id: str) -> ApprovalRequest | None:
+        """The request itself, resolved or not (None for an unknown id)."""
+        return self._pending.get(request_id)
 
     def status(self, request_id: str) -> str:
         req = self._pending.get(request_id)

@@ -1,16 +1,21 @@
-"""SQLite persistence for HITL approvals and taint marks (AL-0.2).
-
-`HitlGate` and `TaintTracker` held their state in process memory, so a mediator
-restart dropped pending approvals (fail-closed, but every in-flight production
-approval silently died) and cleared taint — a fail-open, since taint is
-documented as monotonic within a session. This store sits next to the ledger
-mirror and rehydrates both on boot.
+"""SQLite persistence for the L4 gates' live state: pending HITL approvals and
+taint marks, rehydrated on boot. Pending approvals survive a restart so an
+in-flight production approval is not silently dropped; taint survives because
+it is monotonic within a session — a restart must not launder it.
 
 Deadlines are the subtle part: the gates measure time with a **monotonic**
 clock, whose epoch resets every process. The store therefore keeps the wall
 time of submission, and rehydration re-expresses it in the new process's
-monotonic clock preserving the *elapsed age* — so persistence can never extend
-a deadline (the acceptance the brief demands).
+monotonic clock preserving the *elapsed age*, so a normally-running clock can
+never extend a deadline. Wall time itself can step backward (NTP correction,
+VM snapshot restore); a row whose age computes negative is treated as lapsed —
+fail closed. A backward step smaller than the elapsed age undercounts it by at
+most the step; the deadline is still bounded by the original timeout.
+
+Only PENDING state persists. Resolutions delete the row (receipts are the
+record of what was decided), so an unconsumed approval dies with the process
+instead of becoming a replayable allow-token, and lapsed rows are pruned on
+the next load — the table holds live state, never history.
 
 Like the mirror, the single connection is opened ``check_same_thread=False``
 and guarded by a lock; writes are one-per-decision, so contention is nil.
@@ -70,27 +75,43 @@ class CapabilityStore:
             )
 
     def resolve_approval(self, request_id: str, status: str, resolved_by: str | None) -> None:
+        """A resolution removes the row: the store holds live pending state
+        only — receipts are the record of what was decided. This also means an
+        approved request_id can never be replayed across a restart."""
+        del status, resolved_by  # recorded in the resolution receipt, not here
         with self._lock, self._conn:
             self._conn.execute(
-                "UPDATE approvals SET status = ?, resolved_by = ? WHERE request_id = ?",
-                (status, resolved_by, request_id),
-            )
+                "DELETE FROM approvals WHERE request_id = ?", (request_id,))
 
     def load_approvals(self) -> list[dict]:
-        """All stored approvals, each with ``age_s`` — seconds elapsed since the
-        original wall-clock submission, so a rehydrating gate can re-anchor the
-        request in its own monotonic clock without moving the deadline."""
+        """The pending approvals, each with ``age_s`` — seconds elapsed since
+        the original wall-clock submission, so a rehydrating gate can re-anchor
+        the request in its own monotonic clock without moving the deadline.
+
+        Wall time can step backward between submission and this read (NTP
+        correction, VM snapshot restore); a row whose age comes out negative is
+        from "the future" and is dropped as lapsed — fail closed, never a fresh
+        deadline. Rows already past their deadline are pruned here too, so the
+        table never accumulates history.
+        """
         now = time.time()
-        with self._lock:
+        rows_out: list[dict] = []
+        with self._lock, self._conn:
             rows = self._conn.execute(
-                "SELECT request_id, actor, tool, created_at_wall, timeout_s, "
-                "status, resolved_by FROM approvals"
+                "SELECT request_id, actor, tool, created_at_wall, timeout_s "
+                "FROM approvals"
             ).fetchall()
-        return [{
-            "request_id": r[0], "actor": r[1], "tool": r[2],
-            "age_s": max(0.0, now - r[3]), "timeout_s": r[4],
-            "status": r[5], "resolved_by": r[6],
-        } for r in rows]
+            for request_id, actor, tool, created_at_wall, timeout_s in rows:
+                age_s = now - created_at_wall
+                if age_s < 0 or age_s >= timeout_s:
+                    self._conn.execute(
+                        "DELETE FROM approvals WHERE request_id = ?", (request_id,))
+                    continue
+                rows_out.append({
+                    "request_id": request_id, "actor": actor, "tool": tool,
+                    "age_s": age_s, "timeout_s": timeout_s,
+                })
+        return rows_out
 
     # -- taint ---------------------------------------------------------------
 
