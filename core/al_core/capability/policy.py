@@ -164,6 +164,14 @@ class ToolPolicy:
     def _policy_for(self, actor: str) -> AgentPolicy | None:
         return self._config.agents.get(actor) or self._config.agents.get(self.DEFAULT_KEY)
 
+    def budget_for(self, actor: str) -> int | None:
+        """This actor's max tool calls per minute, or None for no budget.
+
+        Keyed on the actor's own policy — never the ``default`` block, so an
+        unlisted identity carries no budget (it is already deny-all)."""
+        policy = self._config.agents.get(actor)
+        return policy.budgets.max_tool_calls_per_min if policy else None
+
     def check(self, call: ToolCall) -> Decision:
         """Authorize one tool call. Allow only on an explicit, satisfied rule."""
         policy = self._policy_for(call.actor)

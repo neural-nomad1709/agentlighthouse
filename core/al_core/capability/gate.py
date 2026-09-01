@@ -25,6 +25,7 @@ from typing import Any, Callable
 
 from ..detect import ContentGate, GateResult, ScanContext
 from ..gateway.decision import BlockReason, Decision, finding
+from .budget import BudgetTracker
 from .hitl import HitlGate
 from .policy import ToolCall, ToolPolicy
 from .taint import TaintSource, TaintTracker
@@ -73,6 +74,7 @@ class ActionGate:
         recorder: Recorder | None = None,
         known_actor: Callable[[str], bool] | None = None,
         killswitch: Callable[[], bool] | None = None,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         self._policy = policy
         self._chain = chain or ChainDetector()
@@ -80,6 +82,7 @@ class ActionGate:
         self._taint = taint or TaintTracker()
         self._gate = content_gate
         self._record = recorder or (lambda **_: None)
+        self._budget = BudgetTracker(clock=clock)
         # By default any non-empty actor is accepted (transport already
         # authenticated it); pass a registry membership check to tighten.
         self._known_actor = known_actor or (lambda a: bool(a))
@@ -118,6 +121,17 @@ class ActionGate:
         decision = self._policy.check(ToolCall(actor=actor, tool=tool, args=args))
         if not decision.allowed:
             return self._deny(actor, target, decision, session=session_id)
+
+        # 2b. Per-actor rate budget. Only a policy-permitted call reaches here,
+        # so a denied call never consumes a slot. The N+1th within the rolling
+        # minute fails closed with a retryable BUDGET_EXCEEDED.
+        limit = self._policy.budget_for(actor)
+        if limit is not None and not self._budget.check_and_consume(actor, limit):
+            return self._deny(actor, target, Decision.block(
+                BlockReason.BUDGET_EXCEEDED,
+                [finding("tool_policy", "policy.budget_exceeded", "medium",
+                         owasp="ASI08")],
+            ), session=session_id)
 
         # 3. Outbound DLP on the ARGUMENTS themselves.
         #
