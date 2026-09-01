@@ -37,7 +37,9 @@ CREATE TABLE IF NOT EXISTS approvals (
     created_at_wall REAL NOT NULL,
     timeout_s       REAL NOT NULL,
     status          TEXT NOT NULL,
-    resolved_by     TEXT
+    resolved_by     TEXT,
+    detail          TEXT,
+    session         TEXT
 );
 CREATE TABLE IF NOT EXISTS taint (
     session_id TEXT NOT NULL,
@@ -65,13 +67,16 @@ class CapabilityStore:
     def save_approval(
         self, request_id: str, actor: str, tool: str, timeout_s: float,
         *, created_at_wall: float | None = None,
+        detail: str | None = None, session: str | None = None,
     ) -> None:
         with self._lock, self._conn:
             self._conn.execute(
                 "INSERT OR REPLACE INTO approvals "
-                "(request_id, actor, tool, created_at_wall, timeout_s, status, resolved_by) "
-                "VALUES (?, ?, ?, ?, ?, 'pending', NULL)",
-                (request_id, actor, tool, created_at_wall or time.time(), timeout_s),
+                "(request_id, actor, tool, created_at_wall, timeout_s, status, "
+                " resolved_by, detail, session) "
+                "VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?)",
+                (request_id, actor, tool, created_at_wall or time.time(), timeout_s,
+                 detail, session),
             )
 
     def resolve_approval(self, request_id: str, status: str, resolved_by: str | None) -> None:
@@ -98,10 +103,10 @@ class CapabilityStore:
         rows_out: list[dict] = []
         with self._lock, self._conn:
             rows = self._conn.execute(
-                "SELECT request_id, actor, tool, created_at_wall, timeout_s "
-                "FROM approvals"
+                "SELECT request_id, actor, tool, created_at_wall, timeout_s, "
+                "detail, session FROM approvals"
             ).fetchall()
-            for request_id, actor, tool, created_at_wall, timeout_s in rows:
+            for request_id, actor, tool, created_at_wall, timeout_s, detail, session in rows:
                 age_s = now - created_at_wall
                 if age_s < 0 or age_s >= timeout_s:
                     self._conn.execute(
@@ -110,6 +115,7 @@ class CapabilityStore:
                 rows_out.append({
                     "request_id": request_id, "actor": actor, "tool": tool,
                     "age_s": age_s, "timeout_s": timeout_s,
+                    "detail": detail, "session": session,
                 })
         return rows_out
 

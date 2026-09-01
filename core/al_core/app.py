@@ -181,6 +181,8 @@ def create_app(
             "request_id": r.request_id,
             "actor": r.actor,
             "tool": r.tool,
+            "detail": r.detail,
+            "session": r.session,
             "age_s": gate.age_s(r.request_id),
             "remaining_s": gate.remaining_s(r.request_id),
             "timeout_s": r.timeout_s,

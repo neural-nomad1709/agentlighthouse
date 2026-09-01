@@ -60,6 +60,13 @@ class ApprovalRequest:
     status: str = _PENDING
     resolved_at: float | None = None
     resolved_by: str | None = None
+    #: What is actually being approved — e.g. the fully rendered commands a
+    #: remote-exec host will run. Approving a bare tool name is not informed
+    #: consent; every resolution surface shows this.
+    detail: str | None = None
+    #: The caller's session the request belongs to, so an embedder can
+    #: re-associate a rehydrated request with the run that filed it.
+    session: str | None = None
 
 
 class HitlGate:
@@ -94,6 +101,8 @@ class HitlGate:
                     tool=row["tool"],
                     created_at=now - row["age_s"],
                     timeout_s=row["timeout_s"],
+                    detail=row["detail"],
+                    session=row["session"],
                 )
 
     # -- classification ------------------------------------------------------
@@ -111,15 +120,20 @@ class HitlGate:
 
     # -- request lifecycle ---------------------------------------------------
 
-    def submit(self, actor: str, tool: str) -> ApprovalRequest:
+    def submit(
+        self, actor: str, tool: str, *,
+        detail: str | None = None, session: str | None = None,
+    ) -> ApprovalRequest:
         req = ApprovalRequest(
             request_id="hitl_" + secrets.token_hex(8),
             actor=actor, tool=tool,
             created_at=self._clock(), timeout_s=self._timeout_s,
+            detail=detail, session=session,
         )
         self._pending[req.request_id] = req
         if self._store is not None:
-            self._store.save_approval(req.request_id, actor, tool, req.timeout_s)
+            self._store.save_approval(req.request_id, actor, tool, req.timeout_s,
+                                      detail=detail, session=session)
         return req
 
     def approve(self, request_id: str, *, by: str | None = None) -> bool:
