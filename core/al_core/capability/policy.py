@@ -168,9 +168,14 @@ class ToolPolicy:
         """This actor's max tool calls per minute, or None for no budget.
 
         Keyed on the actor's own policy — never the ``default`` block, so an
-        unlisted identity carries no budget (it is already deny-all)."""
+        unlisted identity carries no budget (it is already deny-all). A value
+        of 0 or less means *no budget* (consistent with ``--max-lifetime 0``
+        and ``--idle-timeout 0`` = disabled), never a total lockout."""
         policy = self._config.agents.get(actor)
-        return policy.budgets.max_tool_calls_per_min if policy else None
+        if policy is None:
+            return None
+        limit = policy.budgets.max_tool_calls_per_min
+        return limit if (limit is not None and limit > 0) else None
 
     def check(self, call: ToolCall) -> Decision:
         """Authorize one tool call. Allow only on an explicit, satisfied rule."""

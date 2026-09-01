@@ -14,6 +14,7 @@ the HITL/taint store carries.
 
 from __future__ import annotations
 
+import threading
 from collections import defaultdict, deque
 from typing import Callable
 
@@ -28,6 +29,11 @@ class BudgetTracker:
 
         self._clock = clock or time.monotonic
         self._calls: dict[str, deque[float]] = defaultdict(deque)
+        # The gate serves requests from a thread pool; the check-and-append is
+        # a read-modify-write, so without a lock two racing calls could both
+        # pass the limit check and both append — the exact overrun a rate cap
+        # exists to prevent.
+        self._lock = threading.Lock()
 
     def check_and_consume(self, actor: str, limit: int) -> bool:
         """Record a call for ``actor`` if it fits within ``limit`` per minute.
@@ -35,15 +41,16 @@ class BudgetTracker:
         Returns True and consumes a slot when there is room; returns False and
         consumes nothing when the actor is already at the limit.
         """
-        now = self._clock()
-        window = self._calls[actor]
-        cutoff = now - WINDOW_S
-        while window and window[0] <= cutoff:
-            window.popleft()
-        if len(window) >= limit:
-            return False
-        window.append(now)
-        return True
+        with self._lock:
+            now = self._clock()
+            window = self._calls[actor]
+            cutoff = now - WINDOW_S
+            while window and window[0] <= cutoff:
+                window.popleft()
+            if len(window) >= limit:
+                return False
+            window.append(now)
+            return True
 
 
 __all__ = ["BudgetTracker", "WINDOW_S"]

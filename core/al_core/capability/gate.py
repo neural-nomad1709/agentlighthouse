@@ -122,17 +122,6 @@ class ActionGate:
         if not decision.allowed:
             return self._deny(actor, target, decision, session=session_id)
 
-        # 2b. Per-actor rate budget. Only a policy-permitted call reaches here,
-        # so a denied call never consumes a slot. The N+1th within the rolling
-        # minute fails closed with a retryable BUDGET_EXCEEDED.
-        limit = self._policy.budget_for(actor)
-        if limit is not None and not self._budget.check_and_consume(actor, limit):
-            return self._deny(actor, target, Decision.block(
-                BlockReason.BUDGET_EXCEEDED,
-                [finding("tool_policy", "policy.budget_exceeded", "medium",
-                         owasp="ASI08")],
-            ), session=session_id)
-
         # 3. Outbound DLP on the ARGUMENTS themselves.
         #
         # Policy proves the *shape* of a call is permitted (allowed tool, allowed
@@ -163,6 +152,19 @@ class ActionGate:
                          findings=decision.findings, session=session_id)
             return ActionOutcome(decision=decision, hitl_request_id=req.request_id,
                                  args=args, redaction=redaction)
+
+        # Per-actor rate budget — the last gate, so a slot is consumed only by
+        # a call that will actually proceed. A call denied by policy/DLP/chain
+        # returned earlier, and one held for HITL returned above; none of them
+        # counts. The N+1th executing call in the rolling minute fails closed
+        # with a retryable BUDGET_EXCEEDED.
+        limit = self._policy.budget_for(actor)
+        if limit is not None and not self._budget.check_and_consume(actor, limit):
+            return self._deny(actor, target, Decision.block(
+                BlockReason.BUDGET_EXCEEDED,
+                [finding("tool_policy", "policy.budget_exceeded", "medium",
+                         owasp="ASI08")],
+            ), session=session_id)
 
         # A redaction is an ALLOW with the payload removed — the call proceeds
         # with the placeholder. Only a blocking verdict stops it (above).

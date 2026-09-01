@@ -114,6 +114,42 @@ class TestBudgetEnforcement:
         # the budget is untouched — three real calls still pass
         assert [allowed(gate) for _ in range(3)] == [True, True, True]
 
+    def test_a_call_held_for_hitl_does_not_consume_budget(self) -> None:
+        # 'send_email' is irreversible -> HITL pending, not executed
+        policy = {
+            "agents": {
+                ACTOR: {
+                    "allow": [{"tool": "read_file"}, {"tool": "send_email"}],
+                    "budgets": {"max_tool_calls_per_min": 3},
+                },
+                "default": {"allow": []},
+            }
+        }
+        gate = ActionGate(ToolPolicy.from_dict(policy), clock=FakeClock())
+        for _ in range(5):
+            outcome = gate.authorize(ACTOR, "send_email", {})
+            assert outcome.hitl_request_id  # held, never ran
+        # none of the held calls consumed a slot: three real calls still pass
+        assert [allowed(gate) for _ in range(3)] == [True, True, True]
+
+
+class TestBudgetDisabled:
+    def test_zero_means_no_budget_not_total_lockout(self) -> None:
+        policy = {"agents": {
+            ACTOR: {"allow": [{"tool": "read_file"}],
+                    "budgets": {"max_tool_calls_per_min": 0}},
+            "default": {"allow": []}}}
+        gate = ActionGate(ToolPolicy.from_dict(policy), clock=FakeClock())
+        assert all(allowed(gate) for _ in range(50)), "0 must disable the budget"
+        assert ToolPolicy.from_dict(policy).budget_for(ACTOR) is None
+
+    def test_a_negative_budget_also_disables_rather_than_locks_out(self) -> None:
+        policy = {"agents": {
+            ACTOR: {"allow": [{"tool": "read_file"}],
+                    "budgets": {"max_tool_calls_per_min": -5}},
+            "default": {"allow": []}}}
+        assert ToolPolicy.from_dict(policy).budget_for(ACTOR) is None
+
 
 def test_the_policy_exposes_a_budget_lookup() -> None:
     policy = ToolPolicy.from_dict(POLICY)
