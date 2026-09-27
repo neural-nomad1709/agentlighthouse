@@ -1,6 +1,6 @@
 # AgentLighthouse developer tasks. All Python runs through uv.
 .DEFAULT_GOAL := help
-.PHONY: help install sync test cov lint fmt keygen init check healthz run verify demo demo-memory demo-a2a release compose-config sbom sign pilot clean
+.PHONY: help install sync test cov lint fmt keygen init check healthz run verify demo demo-memory demo-a2a release bump-version compose-config sbom sign pilot clean
 
 IMAGE ?= agentlighthouse/al-core:0.1.0
 
@@ -66,6 +66,9 @@ release: ## Release gate: full suite + all three demos must pass
 	$(MAKE) demo
 	$(MAKE) demo-memory
 	$(MAKE) demo-a2a
+
+bump-version: ## Cut a release: sync versions, roll CHANGELOG, commit + tag (VERSION=X.Y.Z)
+	./scripts/bump-version.sh "$(VERSION)"
 
 clean: ## Remove caches and build artifacts (keeps keys/ and data/)
 	rm -rf .pytest_cache htmlcov .coverage **/__pycache__ dist build
