@@ -2,7 +2,12 @@
 # Blueprints, phase plans, progress tracking, the self-audit, the test plan.
 # Build process and internal notes, not product. The published docs are in
 # docs/ (architecture, OWASP mapping, demos, rollout, compliance).
-.internal/
+/.internal/
+
+# --- Paper ---
+/paper/*
+# --- general files ---
+CLAUDE.md
 
 # --- Secrets & keys (NEVER commit — invariant D5) ---
 keys/
@@ -48,3 +53,5 @@ examples/a2a-lab/run/
 Thumbs.db
 .vscode/
 .idea/
+
+

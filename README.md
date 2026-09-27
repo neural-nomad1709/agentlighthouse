@@ -935,4 +935,4 @@ reverse), but that boundary is architectural, not a licensing split.
 Architecture influenced by the OWASP Agentic Top 10 (2026) and OWASP Agent Memory
 Guard. This is an independent implementation.
 
-"AgentLighthouse" is a working name, pending trademark clearance.
+"AgentLighthouse" is a working name.
