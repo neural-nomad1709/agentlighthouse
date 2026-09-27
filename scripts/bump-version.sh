@@ -58,6 +58,9 @@ for f in "${PYPROJECTS[@]}"; do
 done
 sed -i "s|^\(IMAGE ?= .*:\).*$|\1${VERSION}|" Makefile
 echo "  Makefile (IMAGE)"
+# uv.lock records the workspace members' versions; keep it in step.
+uv lock --quiet
+echo "  uv.lock"
 
 echo "[2/4] CHANGELOG.md: [Unreleased] -> [${VERSION}] - $(date +%Y-%m-%d)"
 TODAY="$(date +%Y-%m-%d)"
@@ -80,7 +83,7 @@ p.write_text(text, encoding="utf-8", newline="\n")
 PY
 
 echo "[3/4] commit"
-git add "${PYPROJECTS[@]}" Makefile CHANGELOG.md
+git add "${PYPROJECTS[@]}" Makefile uv.lock CHANGELOG.md
 git commit -m "Release v${VERSION}"
 
 echo "[4/4] tag v${VERSION}"
