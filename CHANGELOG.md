@@ -12,6 +12,13 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 ## [Unreleased]
 
 ### Added
+### Changed
+### Fixed
+### Security
+
+## [0.2.0] - 2026-09-27
+
+### Added
 - HITL approvals are served: approvals API plus `al hitl` CLI verbs.
 - HITL approvals and taint marks are persisted and rehydrated on boot;
   HitlGate requests carry detail and session, persisted and surfaced.

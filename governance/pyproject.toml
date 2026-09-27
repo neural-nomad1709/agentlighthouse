@@ -2,7 +2,7 @@
 # never depends on this.
 [project]
 name = "al-governance"
-version = "0.1.0"
+version = "0.2.0"
 description = "AgentLighthouse governance: org tenancy, RBAC, budgets, signed posture attestation"
 authors = [{ name = "Amit Kala" }]
 requires-python = ">=3.12"

@@ -5,7 +5,7 @@
 # here from scratch so the trust surface is small and auditable.
 [project]
 name = "al-verify"
-version = "0.1.0"
+version = "0.2.0"
 description = "Standalone, dependency-minimal verifier for AgentLighthouse receipts"
 authors = [{ name = "Amit Kala" }]
 requires-python = ">=3.12"
