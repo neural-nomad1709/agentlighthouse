@@ -76,7 +76,7 @@ marker = "## [Unreleased]\n"
 if marker not in text:
     sys.exit("no [Unreleased] marker found")
 text = text.replace(marker, skeleton + f"## [{version}] - {today}\n", 1)
-p.write_text(text, encoding="utf-8")
+p.write_text(text, encoding="utf-8", newline="\n")
 PY
 
 echo "[3/4] commit"
