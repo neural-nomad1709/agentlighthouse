@@ -14,6 +14,11 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 ### Added
 ### Changed
 ### Fixed
+- `core/al_core/keys/` (the key-management module) is now tracked: the
+  unanchored `keys/` ignore rule had kept it out of the repo, so a clean
+  clone failed with `ModuleNotFoundError: al_core.keys`. Key material under
+  `/keys/` stays ignored.
+
 ### Security
 
 ## [0.2.0] - 2026-09-27
