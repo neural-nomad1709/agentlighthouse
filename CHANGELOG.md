@@ -18,6 +18,9 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
   unanchored `keys/` ignore rule had kept it out of the repo, so a clean
   clone failed with `ModuleNotFoundError: al_core.keys`. Key material under
   `/keys/` stays ignored.
+- `publish-image.yml`: the SBOM step no longer tries to upload a release
+  asset (it needed `contents: write` and failed), which had also skipped
+  cosign signing. The SBOM is attached to the image via `cosign attest`.
 
 ### Security
 

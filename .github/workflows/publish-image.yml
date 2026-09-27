@@ -63,6 +63,9 @@ jobs:
           image: ${{ steps.img.outputs.name }}@${{ steps.build.outputs.digest }}
           format: spdx-json
           output-file: sbom.spdx.json
+          # Uploading to the release needs contents: write; the SBOM travels
+          # with the image as a cosign attestation instead.
+          upload-release-assets: false
 
       # Sign the digest, not the tag: a tag can be moved, a digest cannot.
       - name: Sign the image and attest the SBOM
