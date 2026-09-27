@@ -44,6 +44,10 @@ if ! grep -q '^## \[Unreleased\]' CHANGELOG.md; then
   exit 1
 fi
 
+# python3 may be a non-working Windows Store stub; pick one that runs.
+PYTHON=python3
+"${PYTHON}" -c "" 2>/dev/null || PYTHON=python
+
 PYPROJECTS=(pyproject.toml core/pyproject.toml verify/pyproject.toml governance/pyproject.toml)
 
 echo "[1/4] pyproject.toml versions -> ${VERSION}"
@@ -59,7 +63,7 @@ echo "[2/4] CHANGELOG.md: [Unreleased] -> [${VERSION}] - $(date +%Y-%m-%d)"
 TODAY="$(date +%Y-%m-%d)"
 # Insert a fresh empty [Unreleased] skeleton above the section being dated,
 # then rename that section's heading.
-"$(command -v python3 || command -v python)" - "$VERSION" "$TODAY" <<'PY'
+"${PYTHON}" - "$VERSION" "$TODAY" <<'PY'
 import re, sys, pathlib
 version, today = sys.argv[1], sys.argv[2]
 p = pathlib.Path("CHANGELOG.md")
