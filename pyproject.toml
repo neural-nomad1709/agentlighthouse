@@ -4,7 +4,7 @@
 # reverse); that directory boundary stays enforced by test.
 [project]
 name = "agentlighthouse"
-version = "0.2.0"
+version = "0.2.1"
 description = "AgentLighthouse — runtime security & governance plane for AI agents"
 authors = [{ name = "Amit Kala" }]
 requires-python = ">=3.12"
