@@ -52,12 +52,14 @@ for f in "${PYPROJECTS[@]}"; do
   sed -i "0,/^version = \".*\"/s//version = \"${VERSION}\"/" "${f}"
   echo "  ${f}"
 done
+sed -i "s|^\(IMAGE ?= .*:\).*$|\1${VERSION}|" Makefile
+echo "  Makefile (IMAGE)"
 
 echo "[2/4] CHANGELOG.md: [Unreleased] -> [${VERSION}] - $(date +%Y-%m-%d)"
 TODAY="$(date +%Y-%m-%d)"
 # Insert a fresh empty [Unreleased] skeleton above the section being dated,
 # then rename that section's heading.
-python3 - "$VERSION" "$TODAY" <<'PY'
+"$(command -v python3 || command -v python)" - "$VERSION" "$TODAY" <<'PY'
 import re, sys, pathlib
 version, today = sys.argv[1], sys.argv[2]
 p = pathlib.Path("CHANGELOG.md")
@@ -74,7 +76,7 @@ p.write_text(text, encoding="utf-8")
 PY
 
 echo "[3/4] commit"
-git add "${PYPROJECTS[@]}" CHANGELOG.md
+git add "${PYPROJECTS[@]}" Makefile CHANGELOG.md
 git commit -m "Release v${VERSION}"
 
 echo "[4/4] tag v${VERSION}"
