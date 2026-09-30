@@ -13,8 +13,23 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 
 ### Added
 ### Changed
+- `al-core` now depends on `regex` (learned rules are compiled with it).
 ### Fixed
+- Signed posture attestations counted only the newest 500 receipts, so any
+  longer period signed wrong numbers. They now count every receipt in the
+  period (new paged `iter_receipts` on both audit backends).
 ### Security
+- Path argument constraints (`allow_prefixes` / `deny_prefixes`) now decode
+  percent-encoding (repeatedly), strip a local `file://` scheme and collapse
+  repeated slashes before the prefix check. `//etc/passwd`, `/%65tc/passwd`
+  and `file:///etc/passwd` previously got past `deny_prefixes: [/etc/]`. A NUL
+  byte, a remote `file://` host or over-nested encoding fails the constraint
+  (`arg.<name>.invalid`). Symlinks are still not resolved: that is the tool's
+  or sandbox's job.
+- A catastrophically backtracking learned rule could run past the content
+  gate's deadline, including the async "hard" timeout, because CPython `re`
+  holds the GIL. Learned rules now match with a timeout bound to the gate's
+  deadline and release the GIL; an overrun blocks with `SCANNER_TIMEOUT`.
 
 ## [0.3.0] - 2026-09-30
 

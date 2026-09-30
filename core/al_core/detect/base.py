@@ -43,6 +43,10 @@ class ScanContext:
     direction: Literal["inbound", "outbound"] = "inbound"
     target: str = ""
     content_type: str = "text/plain"
+    #: ``time.monotonic()`` instant the engine's scan budget runs out. Set by
+    #: the engine; a scanner that can bound a single call (a regex match)
+    #: uses it and raises ``TimeoutError`` when it passes.
+    deadline: float | None = None
 
 
 @dataclass(frozen=True)

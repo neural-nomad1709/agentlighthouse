@@ -100,6 +100,7 @@ agents:
     deny: [ { tool: exec_shell } ]
     budgets: { max_tool_calls_per_min: 60, max_outbound_bytes: 1048576 }
 ```
+  Path prefixes are checked after percent-decoding, stripping a local `file://`, collapsing repeated slashes and `..`. Symlinks are not resolved: the mediator cannot see the tool's filesystem, so a link inside an allowed prefix must be contained by the tool or its sandbox.
 - **Tool descriptor pinning:** hash tool descriptions on first sight; drift = rug-pull alert + block until re-approved.
 - **Chain detection:** subsequence match with gap tolerance (recon → stage → exfil through benign interleaving).
 - **HITL:** irreversible verbs (send/delete/transfer/publish/deploy) require human approval via control plane; timeout = deny. An approval is a single-use grant bound to actor, tool, argument digest and session: the agent retries the same call and the grant is spent once.

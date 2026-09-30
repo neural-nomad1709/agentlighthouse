@@ -20,7 +20,7 @@ SQLite-only deployment never pays for it.
 from __future__ import annotations
 
 import json
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 from .db import org_of
 
@@ -256,6 +256,36 @@ class PostgresMirror:
         rows = self._rows(
             f"SELECT receipt_json FROM events {where} ORDER BY seq DESC LIMIT %s", params)
         return [json.loads(r[0]) for r in rows]
+
+    def iter_receipts(
+        self, *, since: str | None = None, until: str | None = None,
+        org: str | None = None, batch: int = 1000,
+    ) -> Iterator[dict[str, Any]]:
+        """Every receipt in the window, newest first — uncapped (see the
+        SQLite twin): keyset-paginated on ``seq``."""
+        base, base_params = _org_filter(org)
+        if since is not None:
+            base.append("ts >= %s")
+            base_params.append(since)
+        if until is not None:
+            base.append("ts <= %s")
+            base_params.append(until)
+        last_seq: int | None = None
+        while True:
+            clauses, params = list(base), list(base_params)
+            if last_seq is not None:
+                clauses.append("seq < %s")
+                params.append(last_seq)
+            where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+            params.append(max(1, batch))
+            rows = self._rows(
+                f"SELECT seq, receipt_json FROM events {where} "
+                "ORDER BY seq DESC LIMIT %s", params)
+            if not rows:
+                return
+            for r in rows:
+                yield json.loads(r[1])
+            last_seq = rows[-1][0]
 
     def time_series(self, *, buckets: int = 24, span_hours: int = 24,
                     now: str | None = None, org: str | None = None) -> list[dict[str, Any]]:

@@ -6,7 +6,8 @@ is deliberately paranoid:
 * every scanner call is wrapped — an exception becomes a **block**
   (``SCANNER_FAILED``, critical), never a skip;
 * a cooperative deadline runs between scanner calls — overruns become a
-  **block** (``SCANNER_TIMEOUT``); the async wrapper adds a hard wall-clock
+  **block** (``SCANNER_TIMEOUT``), and scanners get the deadline so a learned
+  regex bounds its own match; the async wrapper adds a hard wall-clock
   timeout for scanners that hang inside a single call;
 * verdict precedence is ``block > strip > warn > ask > allow`` and unknown
   action strings rank as block (a broken adapter cannot weaken the verdict);
@@ -29,6 +30,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from dataclasses import replace
 from typing import Sequence
 
 from ..gateway.decision import BlockReason
@@ -78,8 +80,10 @@ class ContentGate:
     # -- sync core -----------------------------------------------------------
 
     def scan_text(self, text: str, ctx: ScanContext | None = None) -> GateResult:
-        ctx = ctx or ScanContext()
         deadline = time.monotonic() + self._timeout_s
+        # Scanners get the deadline so one call (a learned regex) can bound
+        # itself; the checks between calls below cannot interrupt a call.
+        ctx = replace(ctx or ScanContext(), deadline=deadline)
 
         variants = normalize_variants(
             text,
@@ -98,6 +102,12 @@ class ContentGate:
                     )
                 try:
                     found = scanner.scan(variant.text, ctx)
+                except TimeoutError:
+                    log.error("scanner %r overran the deadline — failing closed", scanner.name)
+                    return self._fail_closed(
+                        text, BlockReason.SCANNER_TIMEOUT,
+                        f"scanner.timeout.{scanner.name}", hits,
+                    )
                 except Exception:  # noqa: BLE001 — ANY scanner crash blocks
                     log.exception("scanner %r crashed — failing closed", scanner.name)
                     return self._fail_closed(

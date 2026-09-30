@@ -16,7 +16,7 @@ import json
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 def org_of(actor: str) -> str:
     """Tenancy key from a receipt actor. ``spiffe://<org>/agent/<name>`` -> org;
@@ -363,6 +363,45 @@ class SqliteMirror:
                 params,
             ).fetchall()
         return [json.loads(r["receipt_json"]) for r in rows]
+
+    def iter_receipts(
+        self,
+        *,
+        since: str | None = None,
+        until: str | None = None,
+        org: str | None = None,
+        batch: int = 1000,
+    ) -> Iterator[dict[str, Any]]:
+        """Every receipt in the window, newest first — uncapped.
+
+        ``search`` is capped for interactive endpoints; anything that must
+        *count* the ledger (a signed attestation) pages through here instead,
+        keyset-paginated on ``seq`` so memory stays bounded."""
+        base, base_params = _org_filter(org)
+        if since is not None:
+            base.append("ts >= ?")
+            base_params.append(since)
+        if until is not None:
+            base.append("ts <= ?")
+            base_params.append(until)
+        last_seq: int | None = None
+        while True:
+            clauses, params = list(base), list(base_params)
+            if last_seq is not None:
+                clauses.append("seq < ?")
+                params.append(last_seq)
+            where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+            params.append(max(1, batch))
+            with self._lock:
+                rows = self._conn.execute(
+                    f"SELECT seq, receipt_json FROM events {where} "
+                    "ORDER BY seq DESC LIMIT ?", params,
+                ).fetchall()
+            if not rows:
+                return
+            for r in rows:
+                yield json.loads(r["receipt_json"])
+            last_seq = rows[-1]["seq"]
 
     def time_series(self, *, buckets: int = 24, span_hours: int = 24,
                     now: str | None = None, org: str | None = None) -> list[dict[str, Any]]:

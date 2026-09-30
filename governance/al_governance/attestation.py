@@ -57,12 +57,15 @@ def build_attestation(
     health = runtime.healthz()
     chain = health["chain"]
 
-    receipts = db.search(org=org, since=since, until=until, limit=500)
+    # Every receipt in the period — never ``search`` (capped for the UI): a
+    # signed count cut short would be a signed lie.
+    events = 0
     by_verdict: dict[str, int] = {}
     by_action: dict[str, int] = {}
     by_reason: dict[str, int] = {}
     asi: dict[str, int] = {}
-    for r in receipts:
+    for r in db.iter_receipts(org=org, since=since, until=until):
+        events += 1
         by_verdict[r["verdict"]] = by_verdict.get(r["verdict"], 0) + 1
         by_action[r["action"]] = by_action.get(r["action"], 0) + 1
         if r.get("block_reason"):
@@ -91,7 +94,7 @@ def build_attestation(
             "killswitch_engaged": runtime.killswitch.engaged(),
         },
         "evidence": {
-            "events": len(receipts),
+            "events": events,
             "blocks": by_verdict.get("block", 0),
             "by_verdict": dict(sorted(by_verdict.items())),
             "by_action": dict(sorted(by_action.items())),

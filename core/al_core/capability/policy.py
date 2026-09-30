@@ -28,10 +28,11 @@ conjunctive (every listed arg constraint must hold).
 from __future__ import annotations
 
 import posixpath
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import yaml
 from pydantic import BaseModel, ConfigDict
@@ -86,12 +87,45 @@ class ToolCall:
     args: dict[str, Any] = field(default_factory=dict)
 
 
-def _normalize_path(value: Any) -> str:
-    """Collapse ``..`` / ``.`` so a prefix check cannot be walked out of.
+#: Percent-decoding rounds: enough to unwrap any realistic nesting. A value
+#: still encoded after this is refused rather than guessed at.
+_MAX_DECODE_ROUNDS = 3
+_REPEATED_SLASHES = re.compile(r"/{2,}")
 
-    ``/workspace/../etc/passwd`` normalizes to ``/etc/passwd`` and fails an
-    ``allow_prefixes: [/workspace/]`` check — traversal cannot escape."""
-    s = str(value).replace("\\", "/")
+
+def _normalize_path(value: Any) -> str | None:
+    """Canonicalize a path argument so a prefix check cannot be walked out of.
+
+    Percent-encoding (decoded repeatedly, so double-encoding cannot hide), a
+    local ``file://`` scheme, backslashes, repeated slashes and ``..`` / ``.``
+    are all collapsed: ``/workspace/../etc/passwd``, ``//etc/passwd``,
+    ``/%65tc/passwd`` and ``file:///etc/passwd`` all normalize to
+    ``/etc/passwd``. Returns ``None`` for a value that cannot be judged safely
+    (a NUL byte, a remote ``file://`` host, or encoding nested too deep), which
+    the caller treats as a failed constraint.
+
+    Symlinks are *not* resolved: the mediator does not see the tool's
+    filesystem, so a link inside an allowed prefix must be contained by the
+    tool or its sandbox."""
+    s = str(value)
+    for _ in range(_MAX_DECODE_ROUNDS):
+        decoded = unquote(s)
+        if decoded == s:
+            break
+        s = decoded
+    else:
+        if unquote(s) != s:
+            return None
+    if "\x00" in s:
+        return None
+    s = s.replace("\\", "/")
+    if s[:7].lower() == "file://":
+        authority, slash, rest = s[7:].partition("/")
+        if authority.lower() not in ("", "localhost"):
+            return None
+        s = slash + rest
+    # POSIX normpath keeps a leading '//', but the kernel reads it as '/'.
+    s = _REPEATED_SLASHES.sub("/", s)
     normed = posixpath.normpath(s)
     # normpath strips a trailing slash; keep leading slash semantics intact.
     if s.startswith("/") and not normed.startswith("/"):
@@ -112,13 +146,15 @@ def _constraint_fails(name: str, value: Any, c: ArgConstraint) -> str | None:
     if c.allow_hosts is not None:
         if not host_allowed(_host_of(value), c.allow_hosts):
             return f"arg.{name}.host_not_allowed"
-    if c.allow_prefixes is not None:
+    if c.allow_prefixes is not None or c.deny_prefixes is not None:
         p = _normalize_path(value)
+        if p is None:
+            return f"arg.{name}.invalid"
+    if c.allow_prefixes is not None:
         if not any(p == pre.rstrip("/") or p.startswith(pre if pre.endswith("/") else pre + "/")
                    for pre in c.allow_prefixes):
             return f"arg.{name}.prefix_not_allowed"
     if c.deny_prefixes is not None:
-        p = _normalize_path(value)
         if any(p == pre.rstrip("/") or p.startswith(pre if pre.endswith("/") else pre + "/")
                for pre in c.deny_prefixes):
             return f"arg.{name}.prefix_denied"

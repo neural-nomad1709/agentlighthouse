@@ -5,7 +5,9 @@
 # deny wins over allow. Unlisted identities fall through to `default` (deny-all).
 #
 # Argument constraints: allow_hosts (URL/host allowlist, "*.suffix" ok),
-# allow_prefixes / deny_prefixes (path, traversal-normalized), allow_values /
+# allow_prefixes / deny_prefixes (path; `..`, percent-encoding, `file://` and
+# repeated slashes are normalized first; symlinks are not resolved, so contain
+# those in the tool or its sandbox), allow_values /
 # deny_values, max_len.
 
 agents:
