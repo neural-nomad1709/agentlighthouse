@@ -12,6 +12,13 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 ## [Unreleased]
 
 ### Added
+### Changed
+### Fixed
+### Security
+
+## [0.3.0] - 2026-09-30
+
+### Added
 - HITL approvals are single-use **grants**. After approval the agent retries the
   same `tools/call`, optionally naming the request in
   `params._meta["agentlighthouse/hitl_request_id"]`. The grant is bound to the
