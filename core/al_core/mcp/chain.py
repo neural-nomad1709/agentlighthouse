@@ -78,6 +78,7 @@ class _Session:
     categories: list[str] = field(default_factory=list)
     tools: list[str] = field(default_factory=list)
     flagged: bool = False
+    flagged_pattern: tuple[str, ...] = ()
 
 
 class ChainDetector:
@@ -93,30 +94,43 @@ class ChainDetector:
         self._categories = categories or dict(_DEFAULT_CATEGORIES)
         self._patterns = patterns or list(_DEFAULT_PATTERNS)
         self._gap = gap_tolerance
+        # The categories that complete a pattern: in a flagged session any call
+        # in one of these is the attack's payoff and stays blocked.
+        self._terminal = frozenset(p[-1] for p in self._patterns if p)
         self._sessions: dict[str, _Session] = {}
 
     def record(self, session_id: str, tool: str) -> Decision | None:
         """Record a tool call; return a block Decision if it completes a chain.
 
         Returns ``None`` while no configured pattern is a subsequence yet. Once
-        a session is flagged it stays flagged (re-flagging is suppressed so the
-        receipt fires once per chain)."""
+        a session is flagged it stays flagged, and every later call in a
+        pattern's *final* category (exfil) is blocked too. Re-checking the
+        subsequence instead would fail open: padding the history with enough
+        non-matching calls lets the recon match lapse past the gap bound, and
+        the next exfil would sail through. Non-terminal calls still flow."""
         s = self._sessions.setdefault(session_id, _Session())
         s.tools.append(tool)
         cat = classify(tool, self._categories)
         if cat is not None:
             s.categories.append(cat)
         if s.flagged:
+            if cat is not None and cat in self._terminal:
+                return self._block(s.flagged_pattern, sticky=True)
             return None
         for pattern in self._patterns:
             if _is_subsequence(pattern, s.categories, self._gap):
                 s.flagged = True
-                return Decision.block(
-                    BlockReason.TOOL_CHAIN_DETECTED,
-                    [finding("mcp_chain", f"mcp.chain.{'_'.join(pattern)}", "high",
-                             owasp="ASI02", mitre="T1041")],
-                )
+                s.flagged_pattern = pattern
+                return self._block(pattern)
         return None
+
+    @staticmethod
+    def _block(pattern: tuple[str, ...], *, sticky: bool = False) -> Decision:
+        rule = f"mcp.chain.{'_'.join(pattern)}" + (".repeat" if sticky else "")
+        return Decision.block(
+            BlockReason.TOOL_CHAIN_DETECTED,
+            [finding("mcp_chain", rule, "high", owasp="ASI02", mitre="T1041")],
+        )
 
     def is_flagged(self, session_id: str) -> bool:
         s = self._sessions.get(session_id)

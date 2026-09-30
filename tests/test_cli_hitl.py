@@ -60,7 +60,8 @@ def test_approve_resolves_the_request(control_plane):
     req = gate.submit("spiffe://acme/agent/claude-code", "send_email")
     result = _run("approve", req.request_id)
     assert result.exit_code == 0, result.output
-    assert gate.status(req.request_id) == "approved"
+    # the status the live control plane reported (its store closes with the app)
+    assert json.loads(result.output)["status"] == "approved"
 
 
 def test_deny_resolves_the_request(control_plane):
@@ -68,7 +69,8 @@ def test_deny_resolves_the_request(control_plane):
     req = gate.submit("spiffe://acme/agent/claude-code", "delete_backups")
     result = _run("deny", req.request_id)
     assert result.exit_code == 0, result.output
-    assert gate.status(req.request_id) == "denied"
+    # the status the live control plane reported (its store closes with the app)
+    assert json.loads(result.output)["status"] == "denied"
 
 
 def test_resolving_an_unknown_request_fails_clearly(control_plane):

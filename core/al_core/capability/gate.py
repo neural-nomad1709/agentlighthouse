@@ -20,18 +20,32 @@ an injected recorder, so the whole flow is evidence-backed.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from ..detect import ContentGate, GateResult, ScanContext
 from ..gateway.decision import BlockReason, Decision, finding
 from .budget import BudgetTracker
-from .hitl import HitlGate
+from .hitl import HitlGate, args_digest
 from .policy import ToolCall, ToolPolicy
 from .taint import TaintSource, TaintTracker
 from ..mcp.chain import ChainDetector
 
 Recorder = Callable[..., Any]
+
+# Cap on the call rendering shown to an approver; the digest still binds the
+# approval to the full arguments.
+_DETAIL_MAX = 2000
+
+
+def _render_call(tool: str, args: dict[str, Any]) -> str:
+    """What the human is approving: the tool and its (DLP-redacted) arguments.
+    Approving a bare tool name is not informed consent."""
+    rendered = json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)
+    if len(rendered) > _DETAIL_MAX:
+        rendered = rendered[:_DETAIL_MAX] + "…(truncated)"
+    return f"{tool} {rendered}"
 
 
 class _ArgBlocked(Exception):
@@ -98,9 +112,13 @@ class ActionGate:
 
     def authorize(
         self, actor: str, tool: str, args: dict[str, Any] | None = None,
-        *, session_id: str = "default",
+        *, session_id: str = "default", hitl_request_id: str | None = None,
     ) -> ActionOutcome:
+        """``hitl_request_id`` optionally names the approval the agent is
+        retrying under; without it the gate finds the approval by the call
+        itself. Either way the approval must bind to this exact call."""
         args = args or {}
+        requested_args = args  # an approval binds to what the agent asked for
         target = f"tool:{tool}"
 
         # 0. Kill switch: full deny-all, before anything else.
@@ -142,22 +160,36 @@ class ActionGate:
             self._taint.mark(session_id, TaintSource.UNPINNED_TOOL_RESULT)
             return self._deny(actor, target, chain_block, session=session_id)
 
-        # 5. HITL for irreversible / (tainted) protected verbs.
+        # 5. HITL for irreversible / (tainted) protected verbs. An approved
+        # request for this exact call is a single-use grant: the call goes on
+        # to execute. Otherwise it is held (reusing a request already pending
+        # for the same call, so retries don't flood the approvals queue).
         tainted = self._taint.is_tainted(session_id)
+        grant = None
         if self._hitl.requires_approval(tool, tainted=tainted):
-            req = self._hitl.submit(actor, tool)
-            decision = self._hitl.decision(req.request_id)  # HITL_REQUIRED (pending)
-            self._record(actor=actor, action="mcp_tool_call", target=target,
-                         verdict="ask", block_reason=decision.block_reason,
-                         findings=decision.findings, session=session_id)
-            return ActionOutcome(decision=decision, hitl_request_id=req.request_id,
-                                 args=args, redaction=redaction)
+            req = self._hitl.claim(actor, tool, requested_args, session=session_id,
+                                   request_id=hitl_request_id)
+            if req is None:
+                req = self._hitl.submit(actor, tool, args=requested_args,
+                                        detail=_render_call(tool, args),
+                                        session=session_id)
+            decision = self._hitl.decision(req.request_id)
+            if not decision.allowed:
+                if decision.block_reason == BlockReason.HITL_DENIED:
+                    return self._deny(actor, target, decision, session=session_id)
+                self._record(actor=actor, action="mcp_tool_call", target=target,
+                             verdict="ask", block_reason=decision.block_reason,
+                             findings=decision.findings, session=session_id)
+                return ActionOutcome(decision=decision, hitl_request_id=req.request_id,
+                                     args=args, redaction=redaction)
+            grant = req
 
         # Per-actor rate budget — the last gate, so a slot is consumed only by
         # a call that will actually proceed. A call denied by policy/DLP/chain
         # returned earlier, and one held for HITL returned above; none of them
         # counts. The N+1th executing call in the rolling minute fails closed
-        # with a retryable BUDGET_EXCEEDED.
+        # with a retryable BUDGET_EXCEEDED. It runs before a grant is spent, so
+        # a rate-limited retry keeps its approval.
         limit = self._policy.budget_for(actor)
         if limit is not None and not self._budget.check_and_consume(actor, limit):
             return self._deny(actor, target, Decision.block(
@@ -166,13 +198,23 @@ class ActionGate:
                          owasp="ASI08")],
             ), session=session_id)
 
+        if grant is not None:
+            if not self._hitl.consume(grant.request_id, actor, tool, requested_args,
+                                      session=session_id):
+                # lost a race for the grant (another process spent it)
+                return self._deny(actor, target, self._hitl.decision(grant.request_id),
+                                  session=session_id)
+            findings = [*findings, finding("hitl", "hitl.grant_consumed", "low",
+                                           owasp="ASI09")]
+
         # A redaction is an ALLOW with the payload removed — the call proceeds
         # with the placeholder. Only a blocking verdict stops it (above).
         self._record(actor=actor, action="mcp_tool_call", target=target,
                      verdict="strip" if redaction else "allow",
                      findings=findings or None, redaction=redaction or None,
                      session=session_id)
-        return ActionOutcome(decision=Decision.allow(), args=args, redaction=redaction)
+        return ActionOutcome(decision=Decision.allow(), args=args, redaction=redaction,
+                             hitl_request_id=grant.request_id if grant else None)
 
     def _scan_args(
         self, actor: str, tool: str, target: str, args: dict[str, Any],
@@ -232,15 +274,30 @@ class ActionGate:
         return None, redacted, redaction, findings
 
     def resume(self, request_id: str, actor: str, tool: str,
-               *, session_id: str = "default") -> ActionOutcome:
-        """Re-evaluate a held call after an operator resolved its approval."""
-        decision = self._hitl.decision(request_id)
+               args: dict[str, Any] | None = None,
+               *, session_id: str | None = None) -> ActionOutcome:
+        """Re-evaluate a held call after an operator resolved its approval.
+
+        Allows only if the approval binds to this exact call (actor, tool,
+        arguments, and session when given) and spends the grant: a second
+        resume of the same request is denied."""
         target = f"tool:{tool}"
+        req = self._hitl.request(request_id)
+        if req is not None and not req.binds(actor, tool, args_digest(args), session_id):
+            decision = Decision.block(
+                BlockReason.HITL_DENIED,
+                [finding("hitl", "hitl.grant_mismatch", "high", owasp="ASI09")],
+            )
+        elif self._hitl.consume(request_id, actor, tool, args, session=session_id):
+            decision = Decision.allow()
+        else:
+            decision = self._hitl.decision(request_id)
         verdict = "allow" if decision.allowed else "block"
         self._record(actor=actor, action="mcp_tool_call", target=target,
                      verdict=verdict, block_reason=decision.block_reason,
                      findings=decision.findings, session=session_id)
-        return ActionOutcome(decision=decision, hitl_request_id=request_id)
+        return ActionOutcome(decision=decision, hitl_request_id=request_id,
+                             args=args or {})
 
     def scan_result(
         self, text: str, *, actor: str = "", tool: str = "", session_id: str = "default",

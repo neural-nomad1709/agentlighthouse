@@ -136,12 +136,14 @@ def test_exfil_without_recon_not_flagged():
     assert c.record("s", "http_post") is None  # no preceding recon
 
 
-def test_chain_flags_once():
+def test_chain_keeps_blocking_after_flag():
+    # A flagged session stays closed to exfil; the repeat is marked as such.
     c = ChainDetector()
     c.record("s", "read_file")
     first = c.record("s", "http_post")
-    second = c.record("s", "upload")  # still exfil, but already flagged
-    assert first is not None and second is None
+    second = c.record("s", "upload")  # still exfil, session already flagged
+    assert first is not None and second is not None
+    assert second.findings[0]["rule_id"].endswith(".repeat")
 
 
 def test_chain_is_per_session():

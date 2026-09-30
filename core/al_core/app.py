@@ -30,6 +30,8 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .audit.pool import EvidencePool, RemotePlane
+from .capability.hitl import HitlGate
+from .capability.store import CapabilityStore
 from .principal import Authenticator, Principal
 from .runtime import Runtime
 
@@ -78,11 +80,25 @@ def create_app(
     pool = EvidencePool("control" if remotes else "local",
                         runtime.ledger.db, remotes)
 
+    # HITL approvals are filed by the data plane (it runs the tool calls).
+    # When it is a separate process, this plane resolves them in the data
+    # plane's own capability store over the shared volume; the data plane
+    # reads the resolution back and executes the approved call.
+    approvals_store: CapabilityStore | None = None
+    if dp_dir is not None:
+        approvals_store = CapabilityStore(Path(dp_dir) / "capability_state.db")
+        approvals_gate = HitlGate(timeout_s=runtime.settings.policy.hitl_timeout_s,
+                                  store=approvals_store)
+    else:
+        approvals_gate = runtime.action_gate.hitl
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         runtime.start_config_watch()
         yield
         pool.close()
+        if approvals_store is not None:
+            approvals_store.close()
         runtime.close()
 
     app = FastAPI(title="AgentLighthouse", version="0.1.0", lifespan=lifespan)
@@ -176,7 +192,7 @@ def create_app(
             return _unauthorized()
         from .audit.db import org_of
 
-        gate = runtime.action_gate.hitl
+        gate = approvals_gate
         rows = [{
             "request_id": r.request_id,
             "actor": r.actor,
@@ -212,7 +228,7 @@ def create_app(
             )
         from .audit.db import org_of
 
-        gate = runtime.action_gate.hitl
+        gate = approvals_gate
         req = gate.request(request_id)
         if req is None:
             return JSONResponse({"error": "not_found"}, status_code=404)
