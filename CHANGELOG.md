@@ -21,6 +21,13 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 - The approval request's `detail` shows the tool and its (DLP-redacted)
   arguments, so the approver sees what they are approving.
 ### Changed
+- **Upgrade notes (breaking):** (1) an MCP client must call `tools/list`
+  before `tools/call`; a call to a tool it was not shown is denied.
+  (2) `McpSession.filter_response` returns a `FilterOutcome` (`forward` to the
+  agent, `reply` to the server) instead of a dict; embedders must send both.
+  (3) HITL approvals move to table `approval_requests`; requests pending at
+  upgrade are dropped, so agents re-ask. (4) Receipts may carry the new action
+  `mcp_client_reply`; update consumers that validate against the schema.
 - The control plane resolves approvals in the data plane's
   `capability_state.db` when `control.dataplane_dir` is set. Resolutions now
   persist in the store (table `approval_requests`, replacing `approvals`) until
