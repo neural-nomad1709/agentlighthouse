@@ -75,6 +75,28 @@ def tool_call(rid: int, tool: str = "web_search") -> dict:
             "params": {"name": tool, "arguments": {"query": "widget pricing"}}}
 
 
+def sequential_agent(requests: list[dict], replies: list[dict]):
+    """An MCP client that waits for each reply before its next request, as a
+    real one waits for tools/list before calling a listed tool (a call to a
+    tool the agent was not shown is denied)."""
+    pending = list(requests)
+    answered = asyncio.Event()
+    answered.set()
+
+    async def recv_agent():
+        if not pending:
+            return None
+        await answered.wait()
+        answered.clear()
+        return pending.pop(0)
+
+    async def send_agent(msg) -> None:
+        replies.append(msg)
+        answered.set()
+
+    return recv_agent, send_agent
+
+
 def _boot() -> Runtime:
     if WORK.exists():
         shutil.rmtree(WORK)
@@ -107,14 +129,7 @@ def demo_stdio(runtime: Runtime) -> dict:
     replies: list[dict] = []
 
     async def drive() -> None:
-        pending = [tools_list(1), tool_call(2)]
-
-        async def recv_agent():
-            return pending.pop(0) if pending else None
-
-        async def send_agent(msg) -> None:
-            replies.append(msg)
-
+        recv_agent, send_agent = sequential_agent([tools_list(1), tool_call(2)], replies)
         await asyncio.wait_for(run_proxy(session, upstream, recv_agent, send_agent),
                                timeout=30)
 
@@ -133,20 +148,13 @@ def demo_http_upstream(runtime: Runtime) -> dict:
     replies: list[dict] = []
 
     async def drive() -> None:
-        pending = [tool_call(3)]
-
-        async def recv_agent():
-            return pending.pop(0) if pending else None
-
-        async def send_agent(msg) -> None:
-            replies.append(msg)
-
+        recv_agent, send_agent = sequential_agent([tools_list(30), tool_call(3)], replies)
         await asyncio.wait_for(run_proxy(session, upstream, recv_agent, send_agent),
                                timeout=30)
         await client.aclose()
 
     asyncio.run(drive())
-    return replies[-1]
+    return next(r for r in replies if r.get("id") == 3)
 
 
 def demo_http_reverse(runtime: Runtime) -> dict:
@@ -156,6 +164,7 @@ def demo_http_reverse(runtime: Runtime) -> dict:
     headers = {"X-AL-Identity": creds.identity.spiffe_id,
                "Authorization": f"Bearer {creds.token}"}
     with TestClient(app) as client:
+        client.post("/mcp", json=tools_list(40), headers=headers)
         return client.post("/mcp", json=tool_call(4), headers=headers).json()
 
 

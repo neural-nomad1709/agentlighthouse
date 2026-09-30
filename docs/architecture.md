@@ -67,7 +67,7 @@ no direct egress) ──────▶ ┌┴───────────�
 - **Forward proxy** (HTTP CONNECT via `HTTPS_PROXY`) — zero agent code change.
 - **Fetch proxy** (`GET /fetch?url=`).
 - **Reverse proxy** — OpenAI-compatible (`/v1/chat/completions`) + Anthropic-compatible (`/v1/messages`); per-user virtual-key auth + budget check; SSE passthrough with fail-closed scanning.
-- **MCP proxy** — stdio wrap (`al mcp proxy -- npx server`) + Streamable HTTP upstream; bidirectional scan.
+- **MCP proxy** — stdio wrap (`al mcp proxy -- npx server`) + Streamable HTTP upstream; bidirectional scan. Every server reply is scanned whatever the method; replies are relayed only for an in-flight request, once; `tools/call` is allowed only for tools the agent was shown in `tools/list`; server-initiated requests are scanned and, when refused, still answered; the agent's answers to them are DLP-scanned on the way out.
 - **A2A mediation interface** — see §6. Interface from Phase 0; feature behind demo harness.
 - DNS pinning (resolve once, pin IP, re-verify on connect) → kills rebinding.
 - WebSocket proxy **[P2]**; TLS interception (CONNECT MITM) **[deferred]**.
@@ -102,7 +102,7 @@ agents:
 ```
 - **Tool descriptor pinning:** hash tool descriptions on first sight; drift = rug-pull alert + block until re-approved.
 - **Chain detection:** subsequence match with gap tolerance (recon → stage → exfil through benign interleaving).
-- **HITL:** irreversible verbs (send/delete/transfer/publish/deploy) require human approval via control plane; timeout = deny.
+- **HITL:** irreversible verbs (send/delete/transfer/publish/deploy) require human approval via control plane; timeout = deny. An approval is a single-use grant bound to actor, tool, argument digest and session: the agent retries the same call and the grant is spent once.
 - **Taint escalation:** session that ingested untrusted content (web fetch, unpinned tool output) gets elevated scanning + tightened policy on subsequent protected operations.
 
 ### L5 — Memory Guard (ASI06; **shipped Phase 4** — a core feature, not a compose profile)
@@ -114,7 +114,7 @@ Receipt v1 (RFC 8785 JCS canonicalization; SHA-256 chain; Ed25519 mediator signa
 {
   "v": 1, "seq": 42, "ts": "2026-07-10T12:00:00.000Z",
   "actor": "spiffe://acme/agent/claude-code",
-  "action": "mcp_tool_call",            // http_forward|fetch|llm_call|mcp_tool_call|mcp_tool_result|memory_read|memory_write|a2a_message|config_change|killswitch
+  "action": "mcp_tool_call",            // http_forward|fetch|llm_call|mcp_tool_call|mcp_tool_result|mcp_client_reply|memory_read|memory_write|skill_load|a2a_message|config_change|killswitch|remote_exec|session_open|session_close|permission_request
   "target": "tool:send_email",
   "verdict": "block",
   "findings": [ { "scanner": "tool_policy", "rule_id": "policy.default_deny", "severity": "high", "owasp": "ASI03", "mitre": "T1078" } ],
@@ -134,7 +134,7 @@ Receipt v1 (RFC 8785 JCS canonicalization; SHA-256 chain; Ed25519 mediator signa
 | Agent runtime | Untrusted | No direct internet; no control-plane route; identity required |
 | al-core | Trusted mediator | Fails closed on scanner/config/storage failure |
 | LLM providers | Untrusted external | Scanned both directions |
-| MCP tools | Semi-trusted | Descriptor pinned; drift checked; responses scanned |
+| MCP tools | Semi-trusted | Descriptor pinned; drift checked; only advertised tools callable; every reply and server request scanned |
 | Other agents (A2A) | Untrusted | Mediated + scanned like any external input |
 | Memory store | Sensitive | Guarded reads/writes; rollback |
 | Dashboard/API | Privileged | Control network only; RBAC; no agent access |

@@ -46,6 +46,8 @@ class StdioUpstream:
 
     async def send(self, msg: dict[str, Any]) -> None:
         assert self._proc is not None and self._proc.stdin is not None
+        if self._proc.stdin.is_closing():
+            return  # the agent has gone; nothing more is owed to the server
         self._proc.stdin.write(dump_line(msg).encode("utf-8"))
         await self._proc.stdin.drain()
 
@@ -144,7 +146,11 @@ async def run_proxy(
 
     async def server_pump() -> None:
         while (msg := await upstream.recv()) is not None:
-            await send_agent(session.filter_response(msg))
+            out = session.filter_response(msg)
+            if out.forward is not None:  # None = dropped by the session (receipted)
+                await send_agent(out.forward)
+            if out.reply is not None:  # a refused server request still gets an answer
+                await upstream.send(out.reply)
 
     try:
         await asyncio.gather(agent_pump(), server_pump())

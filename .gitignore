@@ -3,6 +3,8 @@
 # Build process and internal notes, not product. The published docs are in
 # docs/ (architecture, OWASP mapping, demos, rollout, compliance).
 /.internal/
+# Product strategy working docs (never published).
+/product_strategy/
 
 # --- Paper ---
 /paper/*

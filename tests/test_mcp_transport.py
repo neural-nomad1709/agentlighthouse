@@ -53,8 +53,37 @@ def _runtime(tmp_path, extra: str = "") -> Runtime:
     return Runtime(cfg, data_dir=tmp_path / "data")
 
 
-def _session(runtime: Runtime, actor: str = AGENT) -> McpSession:
-    return McpSession(runtime.mcp_mediator, actor=actor, session_id="s1")
+def _session(runtime: Runtime, actor: str = AGENT,
+             tools: tuple[str, ...] = ()) -> McpSession:
+    """A session; ``tools`` are listed first, as a real client does: a call to
+    a tool the agent was not shown is denied before the gate."""
+    s = McpSession(runtime.mcp_mediator, actor=actor, session_id="s1")
+    if tools:
+        s.filter_request({"jsonrpc": "2.0", "id": "list", "method": "tools/list"})
+        s.filter_response({"jsonrpc": "2.0", "id": "list", "result": {"tools": [
+            {"name": n, "description": f"The {n} tool."} for n in tools]}}).forward
+    return s
+
+
+def _sequential_agent(requests: list[dict], replies: list[dict]):
+    """An agent that waits for each reply before sending its next request, as
+    an MCP client waits for tools/list before it calls a listed tool."""
+    pending = list(requests)
+    answered = asyncio.Event()
+    answered.set()
+
+    async def recv_agent():
+        if not pending:
+            return None
+        await answered.wait()
+        answered.clear()
+        return pending.pop(0)
+
+    async def send_agent(msg) -> None:
+        replies.append(msg)
+        answered.set()
+
+    return recv_agent, send_agent
 
 
 def _call(rid: int, tool: str, args: dict | None = None) -> dict:
@@ -76,7 +105,7 @@ def test_tools_list_withholds_poisoned_descriptor(tmp_path):
     out = s.filter_response({"jsonrpc": "2.0", "id": 1, "result": {"tools": [
         {"name": "web_search", "description": "Search the web."},
         {"name": "helper", "description": f"A helper. {POISON}"},
-    ]}})
+    ]}}).forward
     names = [t["name"] for t in out["result"]["tools"]]
     assert names == ["web_search"]  # poisoned descriptor never reaches the agent
     rt.close()
@@ -84,7 +113,7 @@ def test_tools_list_withholds_poisoned_descriptor(tmp_path):
 
 def test_tools_call_denied_never_reaches_server(tmp_path):
     rt = _runtime(tmp_path)
-    s = _session(rt)
+    s = _session(rt, tools=("exec_shell",))
     out = s.filter_request(_call(2, "exec_shell", {"cmd": "rm -rf /"}))
     assert out.forward is None  # not forwarded upstream
     assert out.reply["error"]["data"]["block_reason"] == BlockReason.TOOL_DENIED
@@ -93,9 +122,9 @@ def test_tools_call_denied_never_reaches_server(tmp_path):
 
 def test_tool_result_injection_withheld_and_taints(tmp_path):
     rt = _runtime(tmp_path)
-    s = _session(rt)
+    s = _session(rt, tools=("web_search",))
     assert s.filter_request(_call(3, "web_search", {"query": "widgets"})).forward is not None
-    out = s.filter_response(_result(3, POISON))
+    out = s.filter_response(_result(3, POISON)).forward
     assert out["result"]["isError"] is True
     assert out["result"]["_al"]["block_reason"] == BlockReason.INJECTION_BLOCKED
     assert "exfiltrate" not in json.dumps(out["result"]["content"])
@@ -106,9 +135,9 @@ def test_tool_result_injection_withheld_and_taints(tmp_path):
 
 def test_tool_result_secret_redacted_in_place(tmp_path):
     rt = _runtime(tmp_path)
-    s = _session(rt)
+    s = _session(rt, tools=("web_search",))
     s.filter_request(_call(4, "web_search", {}))
-    out = s.filter_response(_result(4, "the key is AKIAIOSFODNN7EXAMPLE ok"))
+    out = s.filter_response(_result(4, "the key is AKIAIOSFODNN7EXAMPLE ok")).forward
     text = out["result"]["content"][0]["text"]
     assert "AKIAIOSFODNN7EXAMPLE" not in text and "[REDACTED:aws-access-key]" in text
     rt.close()
@@ -116,9 +145,9 @@ def test_tool_result_secret_redacted_in_place(tmp_path):
 
 def test_clean_result_passes_through(tmp_path):
     rt = _runtime(tmp_path)
-    s = _session(rt)
+    s = _session(rt, tools=("web_search",))
     s.filter_request(_call(5, "web_search", {}))
-    out = s.filter_response(_result(5, "Widgets cost 10 dollars."))
+    out = s.filter_response(_result(5, "Widgets cost 10 dollars.")).forward
     assert out["result"]["content"][0]["text"] == "Widgets cost 10 dollars."
     rt.close()
 
@@ -147,14 +176,7 @@ def test_stdio_transport_blocks_tool_response_injection(tmp_path):
     replies: list[dict] = []
 
     async def drive() -> None:
-        pending = list(requests)
-
-        async def recv_agent():
-            return pending.pop(0) if pending else None
-
-        async def send_agent(msg) -> None:
-            replies.append(msg)
-
+        recv_agent, send_agent = _sequential_agent(requests, replies)
         await asyncio.wait_for(
             run_proxy(session, upstream, recv_agent, send_agent), timeout=30)
 
@@ -193,15 +215,9 @@ def test_http_upstream_blocks_tool_response_injection(tmp_path):
     replies: list[dict] = []
 
     async def drive() -> None:
-        pending = [{"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
-                   _call(2, "web_search", {"query": "x"})]
-
-        async def recv_agent():
-            return pending.pop(0) if pending else None
-
-        async def send_agent(msg) -> None:
-            replies.append(msg)
-
+        recv_agent, send_agent = _sequential_agent(
+            [{"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+             _call(2, "web_search", {"query": "x"})], replies)
         await asyncio.wait_for(
             run_proxy(session, upstream, recv_agent, send_agent), timeout=30)
         await client.aclose()
@@ -225,7 +241,9 @@ def reverse_app(tmp_path):
             return httpx.Response(200, json={"jsonrpc": "2.0", "id": msg["id"],
                                              "result": {"tools": [
                                                  {"name": "web_search",
-                                                  "description": "Search the web."}]}})
+                                                  "description": "Search the web."},
+                                                 {"name": "exec_shell",
+                                                  "description": "Run a command."}]}})
         return httpx.Response(200, json=_result(msg["id"], POISON))
 
     app = create_gateway_app(rt, transport=httpx.MockTransport(handler))
@@ -240,9 +258,15 @@ def _agent_headers(rt: Runtime) -> dict[str, str]:
             "Authorization": f"Bearer {creds.token}"}
 
 
+def _list_tools(client: TestClient, headers: dict[str, str]) -> None:
+    client.post("/mcp", json={"jsonrpc": "2.0", "id": 0, "method": "tools/list"},
+                headers=headers)
+
+
 def test_http_reverse_blocks_tool_response_injection(reverse_app):
     client, rt = reverse_app
     headers = _agent_headers(rt)
+    _list_tools(client, headers)
     r = client.post("/mcp", json=_call(1, "web_search", {"query": "x"}), headers=headers)
     assert r.status_code == 200
     body = r.json()
@@ -262,8 +286,9 @@ def test_http_reverse_requires_identity(reverse_app):
 
 def test_http_reverse_denies_out_of_policy_tool(reverse_app):
     client, rt = reverse_app
-    r = client.post("/mcp", json=_call(2, "exec_shell", {"cmd": "ls"}),
-                    headers=_agent_headers(rt))
+    headers = _agent_headers(rt)
+    _list_tools(client, headers)
+    r = client.post("/mcp", json=_call(2, "exec_shell", {"cmd": "ls"}), headers=headers)
     assert r.json()["error"]["data"]["block_reason"] == BlockReason.TOOL_DENIED
 
 

@@ -59,7 +59,13 @@ tool (dependency: `cryptography` only).
 **Action vocabulary:** `http_forward`, `fetch`, `llm_call`, `mcp_tool_call`,
 `mcp_tool_result`, `memory_read`, `memory_write`, `skill_load`, `a2a_message`,
 `config_change`, `killswitch`, `remote_exec`, `session_open`, `session_close`,
-`permission_request`.
+`permission_request`, `mcp_client_reply`.
+
+> `mcp_client_reply` (added 2026-09-30) covers the agent (the MCP client)
+> answering a request the MCP server sent it, such as a
+> `sampling/createMessage` result or an elicitation response. The answer is
+> DLP-scanned on its way to the server, and an answer to a request the agent
+> was never shown is dropped. Additive, like the entries below.
 
 > `remote_exec`, `session_open`, `session_close`, `permission_request`
 > (added 2026-08-31, spec v1.1) carry the **remote-execution plane**: a host

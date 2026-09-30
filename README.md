@@ -264,8 +264,11 @@ sequenceDiagram
     else content clear
         Content->>Action: identity-bound policy + arg DLP
         alt irreversible verb
-            Action->>Human: approval request
-            Human-->>Action: approve or timeout (timeout = deny)
+            Action-->>Agent: held: HITL_REQUIRED + hitl_request_id
+            Action->>Human: approval request (tool + arguments)
+            Human-->>Action: approve, deny, or timeout (timeout = deny)
+            Agent->>Action: retry the same call
+            Action->>Action: spend the single-use grant (bound to actor, tool, args, session)
         end
         Action->>World: forward if allowed
         World-->>Action: response (scanned inbound)
@@ -318,8 +321,10 @@ first, so third parties can produce and verify receipts without this runtime.
 ```
 
 - **Action vocabulary (closed set):** `http_forward`, `fetch`, `llm_call`,
-  `mcp_tool_call`, `mcp_tool_result`, `memory_read`, `memory_write`,
-  `skill_load`, `a2a_message`, `config_change`, `killswitch`.
+  `mcp_tool_call`, `mcp_tool_result`, `mcp_client_reply`, `memory_read`,
+  `memory_write`, `skill_load`, `a2a_message`, `config_change`, `killswitch`,
+  `remote_exec`, `session_open`, `session_close`, `permission_request`. The set
+  grows additively: older verifiers still check receipts with newer actions.
 - **Redaction is counts only** — a class-to-count map, never plaintext.
 - **Verification is fail-closed:** the verifier recomputes `record_hash`, checks
   the Ed25519 signature, and validates chain contiguity from genesis. Any failure
@@ -668,7 +673,9 @@ al mcp proxy --actor spiffe://acme/agent/claude-code -- npx some-mcp-server
 ```
 
 `tools/list` is pinned and poison-scanned; `tools/call` is authorized against the
-identity's policy; results are scanned; every decision is receipted.
+identity's policy, and only for a tool in the last `tools/list` the agent received
+(a withheld tool cannot be called by name); every server reply is scanned; every
+decision is receipted.
 
 ### Screen and pin agent instruction files
 

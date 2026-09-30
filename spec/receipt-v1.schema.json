@@ -24,7 +24,8 @@
         "http_forward", "fetch", "llm_call", "mcp_tool_call", "mcp_tool_result",
         "memory_read", "memory_write", "skill_load", "a2a_message", "config_change",
         "killswitch",
-        "remote_exec", "session_open", "session_close", "permission_request"
+        "remote_exec", "session_open", "session_close", "permission_request",
+        "mcp_client_reply"
       ]
     },
     "target": { "type": "string", "description": "What the action was against, e.g. tool:send_email." },

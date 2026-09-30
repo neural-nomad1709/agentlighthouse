@@ -156,6 +156,9 @@ def test_mcp_session_forwards_the_redacted_arguments(tmp_path):
     rt = Runtime(cfg, data_dir=tmp_path / "data")
 
     session = McpSession(rt.mcp_mediator, actor=BOT, session_id="s")
+    session.filter_request({"jsonrpc": "2.0", "id": 0, "method": "tools/list"})
+    session.filter_response({"jsonrpc": "2.0", "id": 0, "result": {"tools": [
+        {"name": "http_post", "description": "POST to a URL."}]}}).forward
     out = session.filter_request({
         "jsonrpc": "2.0", "id": 1, "method": "tools/call",
         "params": {"name": "http_post",

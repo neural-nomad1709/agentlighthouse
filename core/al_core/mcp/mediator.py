@@ -19,8 +19,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable
 
-from ..detect import ContentGate, GateResult
-from ..gateway.decision import Decision
+from ..detect import ContentGate, GateResult, ScanContext
+from ..gateway.decision import BlockReason, Decision, finding
 from .descriptors import ToolDescriptor, ToolPinner, scan_descriptor
 
 if TYPE_CHECKING:  # avoid an import cycle: gate -> mcp.chain -> mcp -> mediator
@@ -82,9 +82,10 @@ class McpMediator:
 
     def authorize_call(
         self, actor: str, tool: str, args: dict[str, Any] | None = None,
-        *, session_id: str = "default",
+        *, session_id: str = "default", hitl_request_id: str | None = None,
     ) -> ActionOutcome:
-        return self._gate.authorize(actor, tool, args, session_id=session_id)
+        return self._gate.authorize(actor, tool, args, session_id=session_id,
+                                    hitl_request_id=hitl_request_id)
 
     def scan_result(self, text: str, **kw) -> GateResult:
         return self._gate.scan_result(text, **kw)
@@ -92,6 +93,53 @@ class McpMediator:
     def approve(self, descriptor: ToolDescriptor) -> None:
         """Operator re-pins a drifted tool (un-block after review)."""
         self._pinner.approve(descriptor)
+
+    def withhold_ambiguous(self, name: str) -> None:
+        """Receipt a tool name advertised with conflicting descriptors."""
+        self._record(actor="mcp", action="mcp_tool_call", target=f"tool:{name}",
+                     verdict="block", block_reason=BlockReason.TOOL_DESCRIPTOR_DRIFT,
+                     findings=[finding("mcp_pin", "mcp.descriptor_duplicate_name",
+                                       "high", owasp="ASI04")])
+
+    def deny_unadvertised(self, actor: str, tool: str, *, session_id: str) -> Decision:
+        """Refuse and receipt a call to a tool the agent was not shown. A
+        withheld (poisoned, drifted, ambiguous) tool must not be reachable by
+        name: withholding it from the list is otherwise only advice."""
+        decision = Decision.block(
+            BlockReason.TOOL_NOT_ALLOWED,
+            [finding("mcp_pin", "mcp.tool_not_advertised", "high", owasp="ASI04")])
+        self._record(actor=actor, action="mcp_tool_call", target=f"tool:{tool}",
+                     verdict="block", block_reason=decision.block_reason,
+                     findings=decision.findings, session=session_id)
+        return decision
+
+    def scan_client_reply(self, text: str, *, actor: str, target: str,
+                          session_id: str) -> GateResult:
+        """Outbound DLP on the agent's answer to a server request (a sampling
+        result, an elicitation response): it carries the agent's context to
+        the server as surely as tool arguments do. Receipted like an argument
+        scan; it does not taint the session (nothing hostile came in)."""
+        result = self._content.scan_text(
+            text, ScanContext(actor=actor, direction="outbound", target=target,
+                              content_type="text/plain"))
+        if result.blocked:
+            self._record(actor=actor, action="mcp_client_reply", target=target,
+                         verdict="block", block_reason=result.block_reason,
+                         findings=result.findings, session=session_id)
+        elif result.verdict in ("strip", "warn"):
+            self._record(actor=actor, action="mcp_client_reply", target=target,
+                         verdict=result.verdict, findings=result.findings,
+                         redaction=result.redaction or None, session=session_id)
+        return result
+
+    def reject_message(self, actor: str, target: str, *, rule: str,
+                       session_id: str, action: str = "mcp_tool_result") -> None:
+        """Receipt a message dropped for a protocol violation: by default one
+        from the server; ``action="mcp_client_reply"`` for one from the agent."""
+        self._record(actor=actor, action=action, target=target,
+                     verdict="block", block_reason=BlockReason.RESULT_BLOCKED,
+                     findings=[finding("mcp_protocol", rule, "high", owasp="ASI01")],
+                     session=session_id)
 
     def _reject(self, desc: ToolDescriptor, decision: Decision) -> None:
         self._record(actor="mcp", action="mcp_tool_call", target=f"tool:{desc.name}",

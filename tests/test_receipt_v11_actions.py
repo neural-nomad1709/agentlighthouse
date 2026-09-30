@@ -89,3 +89,13 @@ def test_an_unknown_action_is_still_refused_by_the_producer(key):
     signer = ReceiptSigner(key)
     with pytest.raises(Exception):
         signer.record(actor="a", action="made_up_action", target="t", verdict="allow")
+
+
+def test_mcp_client_reply_receipt_verifies(key):
+    """Added 2026-09-30, additively: the agent answering an MCP server request."""
+    signer = ReceiptSigner(key)
+    receipt = signer.record(actor="spiffe://acme/agent/claude-code",
+                            action="mcp_client_reply",
+                            target="mcp:sampling/createMessage:reply", verdict="strip",
+                            redaction={"aws-access-key": 1})
+    verify_receipt(receipt, key.public_key())

@@ -482,6 +482,9 @@ def create_gateway_app(
             return JSONResponse(out.reply)
         if out.forward is None:
             return Response(status_code=202)
+        # Only a request of the agent's own is in flight; a forwarded reply to
+        # a server request must not release an agent id that happens to match.
+        sent_id = out.forward.get("id") if out.forward.get("method") else None
         try:
             upstream = await client.post(
                 s.gateway.mcp_upstream_url, json=out.forward,
@@ -489,16 +492,39 @@ def create_gateway_app(
                          "Content-Type": "application/json"})
         except httpx.HTTPError as exc:
             log.warning("mcp upstream error: %s", exc)
+            session.abandon(sent_id)
             return JSONResponse({"error": "upstream_unreachable"}, status_code=502)
         if upstream.status_code == 202 or not upstream.content:
+            session.abandon(sent_id)
             return Response(status_code=202)
         try:
             payload = upstream.json()
         except ValueError:
+            session.abandon(sent_id)
             return JSONResponse({"error": "upstream_invalid_json"}, status_code=502)
-        if isinstance(payload, dict):
-            return JSONResponse(session.filter_response(payload))
-        return JSONResponse(payload)
+        # Every message goes through the session, a JSON-RPC batch included;
+        # anything it drops (unmatched id, blocked server request) is gone.
+        messages = payload if isinstance(payload, list) else [payload]
+        outcomes = [session.filter_response(m) for m in messages if isinstance(m, dict)]
+        relayed = [o.forward for o in outcomes if o.forward is not None]
+        # Answer the server requests we refused, or the server waits on them.
+        for owed in (o.reply for o in outcomes if o.reply is not None):
+            try:
+                await client.post(s.gateway.mcp_upstream_url, json=owed,
+                                  headers={"Accept": "application/json",
+                                           "Content-Type": "application/json"})
+            except httpx.HTTPError as exc:
+                log.warning("mcp upstream error answering a blocked request: %s", exc)
+        # Request/response transport: whatever this reply did not answer, no
+        # later reply will.
+        session.abandon(sent_id)
+        if not relayed:
+            return JSONResponse(
+                {"jsonrpc": "2.0", "id": msg.get("id"),
+                 "error": {"code": -32001,
+                           "message": "AgentLighthouse: upstream reply withheld",
+                           "data": {"block_reason": BlockReason.RESULT_BLOCKED}}})
+        return JSONResponse(relayed if isinstance(payload, list) else relayed[0])
 
     # -- reverse proxy (OpenAI + Anthropic compatible) -------------------------
 

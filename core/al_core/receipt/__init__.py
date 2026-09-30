@@ -32,7 +32,9 @@ RECEIPT_VERSION = 1
 # remote_exec / session_open / session_close / permission_request carry the
 # remote-execution plane: an embedded host (access_control) opening and closing
 # authenticated sessions, running catalogued operations, and filing permission
-# requests for gated ones.
+# requests for gated ones. mcp_client_reply is the agent (the MCP client)
+# answering a server request: outbound DLP on it, or a drop for answering
+# nothing.
 Action = Literal[
     "http_forward",
     "fetch",
@@ -49,6 +51,7 @@ Action = Literal[
     "session_open",
     "session_close",
     "permission_request",
+    "mcp_client_reply",
 ]
 ACTIONS: tuple[str, ...] = tuple(Action.__args__)  # type: ignore[attr-defined]
 
