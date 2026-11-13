@@ -85,87 +85,76 @@ def _anthropic_usage(payload: dict[str, Any]) -> int:
     return (i or 0) + (o or 0) if isinstance(i, int) or isinstance(o, int) else 0
 
 
-def _request_text(body: dict[str, Any]) -> str:
-    """Flatten a chat request's message text for outbound DLP scanning.
+# Fields of a chat message that carry protocol structure, not content. They are
+# never scanned or redacted: a redacted ``tool_call_id`` no longer matches its
+# call, and a redacted tool ``name`` calls nothing.
+_STRUCTURAL_KEYS = frozenset(
+    {"role", "type", "id", "name", "tool_call_id", "tool_use_id", "media_type"})
 
-    Covers OpenAI (``messages[].content`` str or content-part list) and
-    Anthropic (``system`` + ``messages[].content`` blocks). System prompt and
-    all roles are included — a secret leaks the same whichever field carries it.
-    """
-    parts: list[str] = []
-    system = body.get("system")
-    if isinstance(system, str):
-        parts.append(system)
-    elif isinstance(system, list):
-        parts.extend(b.get("text", "") for b in system if isinstance(b, dict))
-    for msg in body.get("messages", []) or []:
-        if not isinstance(msg, dict):
-            continue
-        content = msg.get("content")
-        if isinstance(content, str):
-            parts.append(content)
-        elif isinstance(content, list):
-            for block in content:
-                if isinstance(block, dict) and isinstance(block.get("text"), str):
-                    parts.append(block["text"])
-    return "\n".join(p for p in parts if p)
+# The parts of a chat request that reach the model: prompts, the conversation
+# (text, tool calls and their arguments, tool results) and tool definitions.
+_REQUEST_FIELDS = ("system", "messages", "tools")
 
 
-def _redact_request(body: dict[str, Any], gate) -> dict[str, Any]:
-    """Return a copy of a chat request with each string message field passed
-    through the gate's redaction (typed placeholders substituted in place).
+def _is_content(key: str | None, value: str, parent: dict[str, Any]) -> bool:
+    """True for a string the model reads or writes as content.
 
-    Redacting per-field keeps message structure intact and each placeholder
-    local to the field it came from — no fragile offset-mapping across a
-    flattened prompt."""
+    Inline media is skipped (an OpenAI ``data:`` URL, an Anthropic base64
+    ``source``): it is not prose, and scanning base64 trips the entropy rules."""
+    if key in _STRUCTURAL_KEYS or value.startswith("data:"):
+        return False
+    return not (key == "data" and parent.get("type") == "base64")
+
+
+def _map_content(value: Any, fn, key: str | None = None,
+                 parent: dict[str, Any] | None = None) -> Any:
+    """A copy of ``value`` with ``fn`` applied to every content string, at any
+    depth. Walking the whole structure, rather than naming fields, is what
+    covers ``tool_calls``, ``tool_use`` input, ``tool_result`` and ``tools``."""
+    if isinstance(value, str):
+        return fn(value) if _is_content(key, value, parent or {}) else value
+    if isinstance(value, dict):
+        return {k: _map_content(v, fn, k, value) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_map_content(v, fn, key, parent) for v in value]
+    return value
+
+
+def _content_text(value: Any) -> str:
+    """Every content string in ``value``, joined for one scan."""
+    found: list[str] = []
+
+    def collect(text: str) -> str:
+        found.append(text)
+        return text
+
+    _map_content(value, collect)
+    return "\n".join(s for s in found if s)
+
+
+def _redact_content(value: Any, gate) -> Any:
+    """A copy of ``value`` with each content string passed through the gate's
+    redaction (typed placeholders substituted in place).
+
+    Redacting per field keeps the message structure intact and each
+    placeholder local to the field it came from."""
     def redact(text: str) -> str:
         r = gate.scan_text(text)
         return r.text if r.verdict == "strip" else text
 
-    out = dict(body)
-    system = body.get("system")
-    if isinstance(system, str):
-        out["system"] = redact(system)
-    elif isinstance(system, list):
-        out["system"] = [
-            {**b, "text": redact(b["text"])} if isinstance(b, dict) and isinstance(b.get("text"), str) else b
-            for b in system
-        ]
-    messages = body.get("messages")
-    if isinstance(messages, list):
-        new_msgs = []
-        for msg in messages:
-            if not isinstance(msg, dict):
-                new_msgs.append(msg)
-                continue
-            content = msg.get("content")
-            if isinstance(content, str):
-                new_msgs.append({**msg, "content": redact(content)})
-            elif isinstance(content, list):
-                new_msgs.append({**msg, "content": [
-                    {**b, "text": redact(b["text"])}
-                    if isinstance(b, dict) and isinstance(b.get("text"), str) else b
-                    for b in content
-                ]})
-            else:
-                new_msgs.append(msg)
-        out["messages"] = new_msgs
-    return out
+    return _map_content(value, redact)
 
 
-def _response_text(provider: str, payload: dict[str, Any]) -> str:
-    """Assistant output text from a non-streaming completion (for scanning)."""
-    out: list[str] = []
-    if provider == "openai":
-        for choice in payload.get("choices", []) or []:
-            msg = choice.get("message") or {}
-            if isinstance(msg.get("content"), str):
-                out.append(msg["content"])
-    else:  # anthropic
-        for block in payload.get("content", []) or []:
-            if isinstance(block, dict) and isinstance(block.get("text"), str):
-                out.append(block["text"])
-    return "\n".join(out)
+def _request_content(body: dict[str, Any]) -> dict[str, Any]:
+    """The content-bearing part of a chat request (OpenAI and Anthropic)."""
+    return {k: body[k] for k in _REQUEST_FIELDS if k in body}
+
+
+def _response_content(provider: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """The assistant's output in a non-streaming completion: text and any
+    tool calls it emitted."""
+    field = "choices" if provider == "openai" else "content"
+    return {field: payload[field]} if field in payload else {}
 
 
 def _sse_usage(provider: str, body_text: str) -> int:
@@ -566,7 +555,7 @@ def create_gateway_app(
         # prompt-injection carrier) — block it, and do not consume budget or
         # touch the real key.
         outbound_extras: dict[str, Any] = {}
-        req_text = _request_text(body)
+        req_text = _content_text(_request_content(body))
         if req_text:
             dlp = await runtime.content_gate.scan(
                 req_text,
@@ -586,7 +575,8 @@ def create_gateway_app(
                 outbound_extras = receipt_extras(dlp)
             if dlp.verdict == "strip":
                 # Redact secrets/PII out of the prompt rather than fail the call.
-                body = _redact_request(body, runtime.content_gate)
+                body = {**body, **_redact_content(
+                    _request_content(body), runtime.content_gate)}
 
         upstream_cfg = s.gateway.upstream
         if provider == "openai":
@@ -708,8 +698,10 @@ def create_gateway_app(
 
         # Inbound content scan of the assistant's reply — an LLM can be steered
         # into emitting injection/secrets aimed at downstream tools.
-        if payload is not None and 200 <= upstream.status_code < 300:
-            reply = _response_text(provider, payload)
+        content = upstream.content
+        if isinstance(payload, dict) and 200 <= upstream.status_code < 300:
+            output = _response_content(provider, payload)
+            reply = _content_text(output)
             if reply:
                 result = await runtime.content_gate.scan(reply, resp_ctx)
                 if result.blocked:
@@ -728,8 +720,12 @@ def create_gateway_app(
                         target=f"{target}:response", verdict=result.verdict,
                         latency_ms=_ms(t0), **receipt_extras(result),
                     )
+                if result.verdict == "strip":
+                    # The agent gets the redacted reply, not the receipt of one.
+                    content = json.dumps({**payload, **_redact_content(
+                        output, runtime.content_gate)}).encode("utf-8")
         return Response(
-            content=upstream.content,
+            content=content,
             status_code=upstream.status_code,
             media_type=upstream.headers.get("content-type", "application/json"),
         )

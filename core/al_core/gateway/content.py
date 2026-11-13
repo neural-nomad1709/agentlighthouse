@@ -120,15 +120,22 @@ def _sse_delta_text(raw: bytes) -> str:
         payload = json.loads(data)
     except json.JSONDecodeError:
         return ""
-    # OpenAI: choices[].delta.content ; Anthropic: delta.text
+    # OpenAI: choices[].delta.content and .tool_calls[].function.arguments;
+    # Anthropic: delta.text and delta.partial_json (tool input). A streamed
+    # tool call is model output too.
     out = []
     for choice in payload.get("choices", []) or []:
         delta = choice.get("delta") or {}
         if isinstance(delta.get("content"), str):
             out.append(delta["content"])
+        for call in delta.get("tool_calls") or []:
+            arguments = (call.get("function") or {}).get("arguments") if isinstance(call, dict) else None
+            if isinstance(arguments, str):
+                out.append(arguments)
     delta = payload.get("delta") or {}
-    if isinstance(delta.get("text"), str):
-        out.append(delta["text"])
+    for field in ("text", "partial_json"):
+        if isinstance(delta.get(field), str):
+            out.append(delta[field])
     return "".join(out)
 
 
