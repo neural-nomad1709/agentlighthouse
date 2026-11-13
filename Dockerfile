@@ -12,8 +12,14 @@
 # host. The governance layer (governance/, `al-gov`) is excluded from both:
 # core never imports it and it runs on the control host.
 
+# Base images and uv are pinned by digest (the tag is kept for readability).
+# A tag can be moved; a digest cannot. Refresh with:
+#   docker buildx imagetools inspect <image>:<tag>
+
 # -- dashboard: Vite/React/TS -> static assets (frontend/) ---------------------
-FROM node:20-slim AS dashboard
+# The output is static files, so this stage always runs on the build host's
+# own architecture, even in a multi-arch build.
+FROM --platform=$BUILDPLATFORM node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS dashboard
 
 WORKDIR /frontend
 # Playwright is a devDependency (e2e only); its browsers are useless to a build.
@@ -28,9 +34,9 @@ COPY frontend/ ./
 RUN npm run build   # tsc -b && vite build -> /frontend/dist (base=/dashboard/)
 
 # -- python deps + workspace source (the core) ---------------------------------
-FROM python:3.12-slim AS build
+FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b AS build
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.29@sha256:eb2843a1e56fd9e30c7276ce1a52cba86e64c7b385f5e3279a0e08e02dd058fc /uv /uvx /bin/
 
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
@@ -57,7 +63,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-package al-governance
 
 # -- core runtime: no dashboard ------------------------------------------------
-FROM python:3.12-slim AS core
+FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b AS core
 
 # Non-root runtime user (least privilege — invariant #9).
 RUN useradd --system --uid 10001 --home-dir /app --no-create-home al

@@ -88,7 +88,7 @@ below.
 5. Bring it up and demand the proofs:
 
    ```bash
-   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
    docker compose logs agent-selftest agent-control-probe   # BOTH must exit 0
    curl http://127.0.0.1:8443/healthz                       # healthy + chain verified
    ```
@@ -173,7 +173,7 @@ above does not apply.
 1. Install Docker Desktop, git, Python 3.12+, uv.
 2. Follow Linux steps 2-3 in PowerShell (`python -c ...` for the token;
    skip `chmod`).
-3. `docker compose up -d --build`, then verify probes and healthz as in
+3. `docker compose up -d`, then verify probes and healthz as in
    step 5, and onboard users as in step 6 (`docker compose exec` works the
    same).
 

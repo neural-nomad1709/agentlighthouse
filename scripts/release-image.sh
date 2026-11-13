@@ -6,7 +6,7 @@
 # (cosign signs by registry digest; a local-only image cannot be signed).
 #
 # Usage:
-#   scripts/release-image.sh [IMAGE]            # default: amitkala/agentlighthouse:v1.0
+#   scripts/release-image.sh <IMAGE>            # `make sign` passes the Makefile's IMAGE
 #
 # Signing identity:
 #   COSIGN_KEY=cosign.key scripts/release-image.sh ...   # key-based
@@ -14,7 +14,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-IMAGE="${1:-amitkala/agentlighthouse:v1.0}"
+IMAGE="${1:?usage: scripts/release-image.sh <IMAGE>  (or: make sign)}"
 SBOM_DIR="${SBOM_DIR:-dist}"
 SBOM="${SBOM_DIR}/al-core.spdx.json"
 

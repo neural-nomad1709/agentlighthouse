@@ -7,8 +7,12 @@ on:
 
 jobs:
   test:
-    name: test suite + release gate
-    runs-on: ubuntu-latest
+    name: test suite + release gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -24,13 +28,26 @@ jobs:
 
       # The release gate. If this fails, there is no release.
       - name: Release gate (tool-response injection, all 3 MCP transports)
+        if: runner.os != 'Windows'
         run: make demo
 
       - name: Memory guard demo
+        if: runner.os != 'Windows'
         run: make demo-memory
 
       - name: A2A demo
+        if: runner.os != 'Windows'
         run: make demo-a2a
+
+      # Windows: the same three commands the make targets run, so the job does
+      # not depend on make being installed. bash stops at the first failure.
+      - name: Release gate + demos (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          uv run python examples/tool-response-injection/demo.py
+          uv run python examples/memory-poison/demo.py
+          uv run python examples/a2a-lab/demo.py
 
   image:
     name: image builds from a clean clone

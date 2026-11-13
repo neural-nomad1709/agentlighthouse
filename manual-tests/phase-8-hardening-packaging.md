@@ -51,7 +51,7 @@ powershell -ExecutionPolicy Bypass -File scripts/pilot-install.ps1
 Linux/macOS: `make pilot` (or `scripts/pilot-install.sh`).
 
 Expected: six numbered steps — workspace, keys, full test suite, the
-release-gate demo, `docker compose up -d --build`, then verification that
+release-gate demo, `docker compose pull` and `up -d`, then verification that
 BOTH one-shot probes exited 0 and `/healthz` returns 200 — ending with
 `pilot install complete.` and the two endpoints. Takes several minutes on a
 first run (image build).

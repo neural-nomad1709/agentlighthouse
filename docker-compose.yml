@@ -25,6 +25,12 @@
 # The hardened runtime baseline (invariant #9) is applied to every service via
 # the `x-hardened` anchor.
 
+# The released image: built, cosign-signed and SBOM-attested by
+# .github/workflows/publish-image.yml. Compose PULLS it, so what runs is the
+# signed artifact. scripts/bump-version.sh keeps the tag in step.
+# To build from this checkout instead, add -f docker-compose.build.yml.
+x-image: &image ghcr.io/neural-nomad1709/agentlighthouse:0.3.0
+
 x-hardened: &hardened
   security_opt: ["no-new-privileges:true"]
   cap_drop: ["ALL"]
@@ -54,8 +60,7 @@ volumes:
 services:
   al-core:
     <<: *hardened
-    build: { context: ., dockerfile: Dockerfile }
-    image: amitkala/agentlighthouse:v1.0
+    image: *image
     command:
       ["gateway", "--host", "0.0.0.0", "--port", "8443",
        "--config", "configs/balanced.yaml"]
@@ -102,7 +107,7 @@ services:
   # writer) and shares only the kill-switch sentinel volume with al-core.
   al-control:
     <<: *hardened
-    image: amitkala/agentlighthouse:v1.0
+    image: *image
     command: ["run", "--host", "0.0.0.0", "--port", "8888",
               "--config", "configs/balanced.yaml"]
     networks: [control-net]
@@ -134,7 +139,7 @@ services:
   # `up`. Exit 0 == no out-of-band egress (internal: true is actually in effect).
   # If this service fails, the topology is broken — do not run agents on it.
   agent-selftest:
-    image: amitkala/agentlighthouse:v1.0
+    image: *image
     command: ["egress", "selftest"]
     networks: [agent-net]
     security_opt: ["no-new-privileges:true"]
@@ -148,7 +153,7 @@ services:
   # exit 0 means "no route to control", which is the invariant. If this service
   # fails, an agent could reach the admin API: do not run agents on it.
   agent-control-probe:
-    image: amitkala/agentlighthouse:v1.0
+    image: *image
     command: ["egress", "selftest",
               "--target", "al-control:8888",   # admin API + /api/killswitch
               "--target", "al-control:8898"]

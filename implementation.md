@@ -7,12 +7,13 @@ integrate your agents, and independently verify the evidence it produces.
 
 Every command in this document was executed and verified on a Windows 11 host
 (Docker Desktop, Linux engine) against image
-`amitkala/agentlighthouse:v1.0`. Where a command is platform-specific or has a
+`amitkala/agentlighthouse:v1.0` (the first Docker Hub build). Releases are now
+published only as `ghcr.io/neural-nomad1709/agentlighthouse`. Where a command is platform-specific or has a
 prerequisite, it is called out inline. See the [Verification matrix](#verification-matrix)
 at the end for exactly what was tested and how.
 
 - **Source:** <https://github.com/neural-nomad1709/agentlighthouse>
-- **Image:** `docker pull amitkala/agentlighthouse:v1.0`
+- **Image:** `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0`
 - **License:** MIT
 
 ---
@@ -65,17 +66,17 @@ uv sync
 `al-governance`) into a local `.venv`. All CLI entry points then run through
 `uv run`: `al`, `al-verify`, `al-gov`.
 
-### 1.2 Container (Docker Hub)
+### 1.2 Container (GitHub Container Registry)
 
 Pull the hardened image — the core plus the prebuilt fleet dashboard, running
 non-root. Pull by tag, or pin the digest for an immutable, tamper-evident
 reference:
 
 ```bash
-docker pull amitkala/agentlighthouse:v1.0
+docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0
 
 # immutable digest pin:
-docker pull amitkala/agentlighthouse@sha256:313453f3e50895f90140f5a275d1cd7b68cda39a51bcdccf02b8b823ac6c67f6
+docker pull ghcr.io/neural-nomad1709/agentlighthouse@sha256:8592b6decc79f5ba2ef4f5978fb82c58dd14482146864375d62161fb41495fdc
 ```
 
 > The image is **fail-closed**: a bare `docker run` refuses to start without an
@@ -415,7 +416,7 @@ uv run python examples/a2a-lab/demo.py                    # A2A card poisoning +
 | `uv run al-gov attest export <slug>` | Export a signed posture attestation |
 | `uv run al-gov attest verify <file>` | Verify an attestation |
 | `uv run al-gov cost --org <slug>` | Per-key spend for an org |
-| `docker pull amitkala/agentlighthouse:v1.0` | Download the published image |
+| `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0` | Download the published image |
 | `docker compose up -d` / `down -v` | Bring the sealed topology up / down |
 
 ---
@@ -444,7 +445,7 @@ platform-specific or environment-dependent.
 | `uv run al-gov org/user/attest/cost` | Verified — create, add, export+verify (AEL-2), cost |
 | `uv run python examples/tool-response-injection/demo.py` | Verified — `RELEASE GATE PASSED` (exit 0) |
 | `uv run al egress nftables --al-core-ip <ip>` | Verified (render). `--apply` requires Linux + root (not run here) |
-| `docker pull amitkala/agentlighthouse:v1.0` | Verified — digest `313453f3…c67f6`, reachable |
+| `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0` | Manifest resolves (digest `8592b6de…5fdc`, checked 2026-11-13). The rows below were run against the earlier `amitkala/agentlighthouse:v1.0` build |
 | `docker compose config` | Verified — topology valid |
 | `docker compose up -d` / `down -v` | Verified — al-core healthy, both probes exit 0, teardown clean |
 | bare `docker run <image>` | Verified fail-closed — refuses without admin token (use Compose) |

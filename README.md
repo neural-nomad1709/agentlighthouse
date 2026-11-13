@@ -14,14 +14,14 @@ independently verifiable evidence** of every decision it takes.
 ![Tests](https://img.shields.io/badge/tests-699-brightgreen.svg)
 ![Evidence](https://img.shields.io/badge/evidence-Ed25519%20%2B%20RFC%208785-informational.svg)
 ![Status](https://img.shields.io/badge/status-pilot%2Fdesign--partner-orange.svg)
-[![Docker Image](https://img.shields.io/badge/docker-amitkala%2Fagentlighthouse%3Av1.0-2496ED.svg?logo=docker&logoColor=white)](https://hub.docker.com/r/amitkala/agentlighthouse)
+[![Image](https://img.shields.io/badge/image-ghcr.io%2Fneural--nomad1709%2Fagentlighthouse-2496ED.svg?logo=docker&logoColor=white)](https://github.com/neural-nomad1709/agentlighthouse/pkgs/container/agentlighthouse)
 
 > Runs on a laptop for evaluation; ships as a hardened, signed container for
 > production. Every claim in this document maps to a shipped, tested mechanism.
 > Where a capability is not yet delivered, it is named plainly in
 > [What This Does Not Do](#what-this-does-not-do).
 
-**Source:** <https://github.com/neural-nomad1709/agentlighthouse> &nbsp;·&nbsp; **Image:** `docker pull amitkala/agentlighthouse:v1.0`
+**Source:** <https://github.com/neural-nomad1709/agentlighthouse> &nbsp;·&nbsp; **Image:** `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0`
 
 ---
 
@@ -493,17 +493,19 @@ cd agentlighthouse
 ### Get the published image (container)
 
 The hardened image — the core plus the prebuilt fleet dashboard, running
-non-root — is published to Docker Hub. Pull it by tag, or pin the digest for an
-immutable, tamper-evident reference:
+non-root — is published to the GitHub Container Registry, cosign-signed, with
+an SBOM attestation. Pull it by tag, or pin the digest for an immutable,
+tamper-evident reference:
 
 ```bash
-docker pull amitkala/agentlighthouse:v1.0
+docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0
 
 # immutable digest pin:
-docker pull amitkala/agentlighthouse@sha256:313453f3e50895f90140f5a275d1cd7b68cda39a51bcdccf02b8b823ac6c67f6
+docker pull ghcr.io/neural-nomad1709/agentlighthouse@sha256:8592b6decc79f5ba2ef4f5978fb82c58dd14482146864375d62161fb41495fdc
 ```
 
-The repository's `docker-compose.yml` references this same image and wraps it in
+The repository's `docker-compose.yml` pulls this same signed image (add
+`-f docker-compose.build.yml` to build from the checkout instead) and wraps it in
 the full segregated topology (agent-net / egress-net / control-net, the kill
 switch, and the two boot probes) — see [Deployment Models](#deployment-models).
 
@@ -891,9 +893,9 @@ make cov                         # coverage report
 
 ## Versioning
 
-The core package is versioned (`al-core` 0.1.0). Released container images are
-tagged with semantic-version and `latest` tags and published to `ghcr.io`, signed
-by digest. A formal public versioning and release-cadence policy is not yet
+All four packages share one version (see `CHANGELOG.md`). Released container
+images are tagged with semantic-version and `latest` tags and published to
+`ghcr.io`, signed by digest. A formal public versioning and release-cadence policy is not yet
 documented; treat the current line as pre-1.0.
 
 ## FAQ

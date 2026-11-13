@@ -58,6 +58,8 @@ for f in "${PYPROJECTS[@]}"; do
 done
 sed -i "s|^\(IMAGE ?= .*:\).*$|\1${VERSION}|" Makefile
 echo "  Makefile (IMAGE)"
+sed -i "s|^\(x-image: &image .*:\).*$|\1${VERSION}|" docker-compose.yml
+echo "  docker-compose.yml (x-image)"
 # uv.lock records the workspace members' versions; keep it in step.
 uv lock --quiet
 echo "  uv.lock"
@@ -83,7 +85,7 @@ p.write_text(text, encoding="utf-8", newline="\n")
 PY
 
 echo "[3/4] commit"
-git add "${PYPROJECTS[@]}" Makefile uv.lock CHANGELOG.md
+git add "${PYPROJECTS[@]}" Makefile docker-compose.yml uv.lock CHANGELOG.md
 git commit -m "Release v${VERSION}"
 
 echo "[4/4] tag v${VERSION}"

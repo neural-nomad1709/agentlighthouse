@@ -18,7 +18,7 @@ Container image licensing:
                     `docker build .` yields a working /dashboard with no
                     Node on the host.
     --target core   the Python core only, no dashboard:
-                    docker build --target core -t agentlighthouse/al-core:core .
+                    docker build --target core -t agentlighthouse:core .
 
   Neither image contains the governance layer (governance/, `al-gov`): the
   core never imports it and it runs on the control host.

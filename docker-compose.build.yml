@@ -1,0 +1,16 @@
+# Build the image from this checkout instead of pulling the signed release.
+# For development and for testing unreleased changes:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#
+# The local tag is never pushed.
+services:
+  al-core:
+    build: { context: ., dockerfile: Dockerfile }
+    image: agentlighthouse:dev
+  al-control:
+    image: agentlighthouse:dev
+  agent-selftest:
+    image: agentlighthouse:dev
+  agent-control-probe:
+    image: agentlighthouse:dev

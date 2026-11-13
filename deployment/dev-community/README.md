@@ -135,7 +135,7 @@ unless both topology probes prove the boundary. The manual steps:
    sandbox starts:
 
    ```
-   docker compose up -d --build
+   docker compose up -d      # pulls the signed release image
    docker compose logs agent-selftest agent-control-probe
    ```
 

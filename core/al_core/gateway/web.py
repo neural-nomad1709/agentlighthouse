@@ -26,6 +26,7 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
+from .. import __version__
 from ..detect import ScanContext
 from ..detect.budget import domain_of
 from ..mcp.session import McpSession
@@ -261,7 +262,7 @@ def create_gateway_app(
             await forward.stop()
         await client.aclose()
 
-    app = FastAPI(title="AgentLighthouse Gateway", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="AgentLighthouse Gateway", version=__version__, lifespan=lifespan)
     app.state.runtime = runtime
 
     @app.middleware("http")

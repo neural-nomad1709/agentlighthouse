@@ -94,7 +94,7 @@ analyst can pull the receipt by hash and verify it with `al-verify` alone.
 ### 5.5 Both probes gate the agent on every up
 
 ```
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 docker compose logs agent-selftest agent-control-probe
 ```
 

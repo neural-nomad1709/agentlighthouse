@@ -29,8 +29,9 @@ uv run pytest -q
 echo "[4/6] release gate (tool-response injection blocked on all 3 MCP transports)"
 uv run python examples/tool-response-injection/demo.py
 
-echo "[5/6] sealed topology (docker compose up)"
-docker compose up -d --build
+echo "[5/6] sealed topology (pull the signed image, docker compose up)"
+docker compose pull
+docker compose up -d
 
 echo "[6/6] verify the topology proofs"
 for svc in agent-selftest agent-control-probe; do

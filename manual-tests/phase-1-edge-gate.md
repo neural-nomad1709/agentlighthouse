@@ -171,7 +171,7 @@ Requires Docker Desktop (Windows) or Docker Engine + compose (Linux), running.
 ### 1.12 The topology proves itself on every `up`
 
 ```
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 docker compose ps
 docker compose logs agent-selftest
 ```

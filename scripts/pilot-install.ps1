@@ -35,8 +35,10 @@ Write-Host "[4/6] release gate (tool-response injection blocked on all 3 MCP tra
 uv run python examples/tool-response-injection/demo.py
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
-Write-Host "[5/6] sealed topology (docker compose up)"
-docker compose up -d --build
+Write-Host "[5/6] sealed topology (pull the signed image, docker compose up)"
+docker compose pull
+if ($LASTEXITCODE -ne 0) { exit 1 }
+docker compose up -d
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
 Write-Host "[6/6] verify the topology proofs"

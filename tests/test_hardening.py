@@ -159,3 +159,88 @@ def test_pilot_install_gates_on_the_topology_proofs():
         assert "agent-selftest" in text, script.name
         assert "agent-control-probe" in text, script.name
         assert "ExitCode" in text, script.name
+
+
+# -- supply chain: pinned inputs, one image name, the signed image -------------
+
+IMAGE_REPO = "ghcr.io/neural-nomad1709/agentlighthouse"
+
+
+def _project_version() -> str:
+    import tomllib
+
+    return tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
+        "project"]["version"]
+
+
+def test_every_image_the_build_pulls_is_pinned_by_digest(dockerfile):
+    """A tag can be moved after review; a digest cannot."""
+    refs = re.findall(r"^FROM (?:--platform=\S+ )?(\S+)", dockerfile, re.MULTILINE)
+    refs += re.findall(r"--from=(\S+)", dockerfile)
+    external = [r for r in refs if "/" in r or ":" in r]  # not a stage name
+    assert external, "no external image references found"
+    for ref in external:
+        assert "@sha256:" in ref, ref
+        assert ":latest" not in ref, ref
+
+
+def test_compose_pulls_the_released_image_and_never_builds(compose):
+    """Compose runs the cosign-signed release, not a local rebuild."""
+    ours = [n for n, s in compose["services"].items() if n != "agent-sandbox"]
+    for name in ours:
+        svc = compose["services"][name]
+        assert "build" not in svc, name
+        assert svc["image"] == f"{IMAGE_REPO}:{_project_version()}", name
+
+
+def test_local_build_override_builds_every_service_from_one_tag(compose):
+    override = yaml.safe_load(
+        (ROOT / "docker-compose.build.yml").read_text(encoding="utf-8"))
+    ours = {n for n in compose["services"] if n != "agent-sandbox"}
+    assert set(override["services"]) == ours
+    assert "build" in override["services"]["al-core"]
+    assert len({s["image"] for s in override["services"].values()}) == 1
+
+
+def test_there_is_one_image_name():
+    """Makefile, compose and the publish workflow agree; Docker Hub is gone."""
+    makefile = MAKEFILE.read_text(encoding="utf-8")
+    assert f"IMAGE ?= {IMAGE_REPO}:{_project_version()}" in makefile
+    workflow = (ROOT / ".github" / "workflows" / "publish-image.yml").read_text(
+        encoding="utf-8")
+    assert "ghcr.io/${GITHUB_REPOSITORY,,}" in workflow
+    for path in (MAKEFILE, COMPOSE, RELEASE_SH, ROOT / "README.md",
+                 ROOT / "scripts" / "bump-version.sh"):
+        text = path.read_text(encoding="utf-8")
+        assert "amitkala/agentlighthouse" not in text, path.name
+        assert "agentlighthouse/al-core" not in text, path.name
+
+
+def test_version_bump_also_moves_the_compose_image_tag():
+    text = (ROOT / "scripts" / "bump-version.sh").read_text(encoding="utf-8")
+    assert "x-image: &image" in text and "docker-compose.yml" in text
+
+
+def test_published_image_is_multi_arch():
+    workflow = (ROOT / ".github" / "workflows" / "publish-image.yml").read_text(
+        encoding="utf-8")
+    assert "platforms: linux/amd64,linux/arm64" in workflow
+    assert "docker/setup-qemu-action" in workflow
+
+
+def test_ci_runs_the_suite_on_windows_too():
+    ci = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    assert set(ci["jobs"]["test"]["strategy"]["matrix"]["os"]) >= {
+        "ubuntu-latest", "windows-latest"}
+
+
+def test_packages_report_the_released_version():
+    import al_core
+    import al_governance
+    import al_verify
+
+    version = _project_version()
+    assert al_core.__version__ == version
+    assert al_verify.__version__ == version
+    assert al_governance.__version__ == version
