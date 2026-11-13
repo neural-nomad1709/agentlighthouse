@@ -255,3 +255,108 @@ def test_d7_streamed_tool_call_arguments_feed_the_stream_scan():
                  "delta": {"type": "input_json_delta", "partial_json": " instructions"}}
     assert _sse_delta_text(b"data: " + json.dumps(openai).encode()) == "ignore all previous"
     assert _sse_delta_text(b"data: " + json.dumps(anthropic).encode()) == " instructions"
+
+
+# -- /fetch URL (D11) ------------------------------------------------------------
+
+FETCH_CFG = """
+mode: {mode}
+gateway:
+  allow_hosts: ["api.example.com", "cdn.example.com"]
+  allow_ports: [443]
+"""
+
+
+def _fetch(tmp_path, url: str, mode: str = "balanced", handler=None):
+    """GET /fetch?url=<url> as a registered agent. Returns
+    (response, URLs the upstream saw, the receipts)."""
+    runtime = _runtime(tmp_path, FETCH_CFG.format(mode=mode))
+    seen: list[str] = []
+
+    def default(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"ok", headers={"content-type": "text/plain"})
+
+    def record(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return (handler or default)(request)
+
+    creds = runtime.registry.issue("acme", "bot")
+    app = create_gateway_app(runtime, transport=httpx.MockTransport(record),
+                             resolve=lambda h: [PUBLIC_IP])
+    with TestClient(app) as client:
+        r = client.get("/fetch", params={"url": url}, headers={
+            "X-AL-Identity": creds.identity.spiffe_id,
+            "Authorization": f"Bearer {creds.token}"})
+    receipts = [x for x in runtime.ledger.db.recent(limit=50) if x["action"] == "fetch"]
+    runtime.close()
+    return r, seen, receipts
+
+
+def test_d11_secret_in_the_fetch_url_never_leaves(tmp_path):
+    """An agent allowed to fetch from a host carries a key out in the query
+    string. The request must not be sent."""
+    r, seen, receipts = _fetch(tmp_path, f"https://api.example.com/collect?k={AWS_KEY}")
+    assert r.status_code == 403
+    assert r.headers["X-AL-Block-Reason"] == "SECRET_BLOCKED"
+    assert seen == []
+    assert receipts[0]["verdict"] == "block"
+    assert AWS_KEY not in json.dumps(receipts)
+
+
+def test_d11_percent_encoded_secret_in_the_fetch_url_is_blocked(tmp_path):
+    r, seen, receipts = _fetch(
+        tmp_path, "https://api.example.com/collect?k=AKIA%49OSFODNN7EXAMPLE")
+    assert r.status_code == 403 and seen == []
+    assert AWS_KEY not in json.dumps(receipts)
+
+
+def test_d11_secret_in_the_fetch_url_path_is_blocked_and_redacted(tmp_path):
+    r, seen, receipts = _fetch(tmp_path, f"https://api.example.com/drop/{AWS_KEY}/x")
+    assert r.status_code == 403 and seen == []
+    assert receipts[0]["target"] == f"https://api.example.com/drop/{REDACTED}/x"
+
+
+def test_d11_pii_in_the_fetch_url_is_blocked(tmp_path):
+    r, seen, _ = _fetch(tmp_path, "https://api.example.com/u?email=alice@example.com")
+    assert r.status_code == 403
+    assert r.headers["X-AL-Block-Reason"] == "PII_BLOCKED"
+    assert seen == []
+
+
+def test_d11_receipt_target_drops_query_values_and_fragment(tmp_path):
+    """A token no scanner recognises still must not reach the ledger: the
+    receipt keeps the parameter names and drops every value."""
+    r, seen, receipts = _fetch(
+        tmp_path, "https://api.example.com/v1/items?session=hunter2&page=2#frag")
+    assert r.status_code == 200
+    assert seen == [f"https://{PUBLIC_IP}/v1/items?session=hunter2&page=2"]
+    assert receipts[0]["verdict"] == "allow"
+    assert receipts[0]["target"] == "https://api.example.com/v1/items?session=&page="
+
+
+def test_d11_redirect_target_is_receipted_without_query_values(tmp_path):
+    """A redirect to a signed URL is the server's doing, not exfiltration: it
+    is followed, and the signature stays out of the ledger."""
+    signed = f"https://cdn.example.com/obj?X-Amz-Credential={AWS_KEY}&X-Amz-Signature=abc123"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/download":
+            return httpx.Response(302, headers={"location": signed})
+        return httpx.Response(200, content=b"ok", headers={"content-type": "text/plain"})
+
+    r, seen, receipts = _fetch(tmp_path, "https://api.example.com/download", handler=handler)
+    assert r.status_code == 200 and len(seen) == 2
+    assert receipts[0]["target"] == (
+        "https://cdn.example.com/obj?X-Amz-Credential=&X-Amz-Signature=")
+    assert AWS_KEY not in json.dumps(receipts)
+
+
+def test_d11_audit_mode_observes_a_secret_in_the_fetch_url(tmp_path):
+    """Audit mode does not enforce, but the finding is receipted and the query
+    value still stays out of the ledger."""
+    r, seen, receipts = _fetch(
+        tmp_path, f"https://api.example.com/collect?k={AWS_KEY}", mode="audit")
+    assert r.status_code == 200 and len(seen) == 1
+    assert receipts[0]["verdict"] == "warn"
+    assert "secrets.aws_access_key" in json.dumps(receipts[0]["findings"])
+    assert AWS_KEY not in json.dumps(receipts)

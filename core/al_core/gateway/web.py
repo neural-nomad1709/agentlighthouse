@@ -20,7 +20,7 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
 import httpx
 from fastapi import FastAPI, Request
@@ -68,6 +68,31 @@ def _pinned_url(original: str, ip: str, port: int) -> tuple[str, str]:
     default_port = 443 if parts.scheme == "https" else 80
     host_header = host if port == default_port else f"{host}:{port}"
     return pinned, host_header
+
+
+def _receipt_url(url: str) -> str:
+    """The form of a URL that goes into a receipt: parameter names without
+    their values, no fragment, no userinfo.
+
+    Receipts are signed and kept, and query strings carry tokens, signatures
+    and session ids. Dropping every value keeps them out of the ledger whether
+    or not a scanner would have recognised them."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return url.partition("?")[0].partition("#")[0]
+    names = "&".join(
+        pair.partition("=")[0] + "=" for pair in parts.query.split("&") if pair)
+    return urlunsplit(
+        (parts.scheme, parts.netloc.rpartition("@")[2], parts.path, names, ""))
+
+
+def _merge_extras(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:
+    """Receipt extras of two scans of one request, findings of both kept."""
+    merged = {**first, **second}
+    if first.get("findings") and second.get("findings"):
+        merged["findings"] = first["findings"] + second["findings"]
+    return merged
 
 
 def _openai_usage(payload: dict[str, Any]) -> int:
@@ -291,11 +316,36 @@ def create_gateway_app(
                 [finding("egress_policy", "identity.missing", "high", owasp="ASI03")],
             )
             runtime.record(
-                actor=actor, action="fetch", target=url,
+                actor=actor, action="fetch", target=_receipt_url(url),
                 verdict="block", block_reason=decision.block_reason,
                 findings=decision.findings, latency_ms=_ms(t0),
             )
             return _block_response(decision, 401)
+
+        # Outbound DLP on the URL itself. An agent allowed to fetch from a
+        # host can carry a secret out in the path or query string, so the
+        # decoded URL gets the same content gate as an outbound prompt. Only
+        # the URL the agent asked for is scanned: a redirect target is the
+        # server's choice (often a signed URL), not something the agent sent.
+        dlp = await runtime.content_gate.scan(
+            unquote(url),
+            ScanContext(actor=actor, direction="outbound", target=domain_of(url)),
+        )
+        target = _receipt_url(dlp.text if dlp.verdict == "strip" else url)
+        if dlp.verdict == "strip":
+            # A prompt can be sent redacted. A URL cannot: redacted, it names
+            # a different resource. So a strip verdict here denies the fetch.
+            scanners = {f["scanner"] for f in dlp.findings} - {"entropy"}
+            dlp_reason = (BlockReason.PII_BLOCKED if scanners == {"pii"}
+                          else BlockReason.SECRET_BLOCKED)
+        else:
+            dlp_reason = dlp.block_reason
+        # The verdict is enforced below, after the egress policy has had its
+        # say: a disallowed scheme or host keeps its own, more precise reason.
+        dlp_denied = dlp.blocked or dlp.verdict == "strip"
+        # Warn findings (and everything audit mode observed) ride the receipt
+        # of whatever happens to this fetch next.
+        url_extras = {} if dlp_denied else receipt_extras(dlp)
 
         # Rate limit: one slot per fetch, keyed on the requested destination
         # (denial-of-wallet / loop-storm guard). Checked before any egress.
@@ -307,7 +357,7 @@ def create_gateway_app(
                 [finding("rate_budget", "rate.per_domain_rps", "medium", owasp="ASI08")],
             )
             runtime.record(
-                actor=actor, action="fetch", target=url,
+                actor=actor, action="fetch", target=target,
                 verdict="block", block_reason=decision.block_reason,
                 findings=decision.findings, latency_ms=_ms(t0),
             )
@@ -323,11 +373,17 @@ def create_gateway_app(
                 decision = _policy().check_connect(host, port)
             if not decision.allowed:
                 runtime.record(
-                    actor=actor, action="fetch", target=current,
+                    actor=actor, action="fetch", target=target,
                     verdict="block", block_reason=decision.block_reason,
                     findings=decision.findings, latency_ms=_ms(t0),
                 )
                 return _block_response(decision, 403)
+            if dlp_denied:  # only reachable on the first hop
+                runtime.record(
+                    actor=actor, action="fetch", target=target, verdict="block",
+                    block_reason=dlp_reason, latency_ms=_ms(t0), **receipt_extras(dlp),
+                )
+                return _block_response(Decision.block(dlp_reason, dlp.findings), 403)
 
             assert decision.pin is not None
             pinned, host_header = _pinned_url(current, decision.pin.ip, port)
@@ -339,11 +395,12 @@ def create_gateway_app(
                     extensions={"sni_hostname": host},
                 )
             except httpx.HTTPError as exc:
-                log.warning("fetch upstream error for %s: %s", current, exc)
+                log.warning("fetch upstream error for %s: %s", target, exc)
                 return JSONResponse({"error": "upstream_unreachable"}, status_code=502)
 
             if upstream.status_code in _REDIRECT_CODES and "location" in upstream.headers:
                 current = urljoin(current, upstream.headers["location"])
+                target = _receipt_url(current)
                 continue
 
             body = upstream.content
@@ -353,7 +410,7 @@ def create_gateway_app(
                     [finding("data_budget", "fetch.size_exceeded", "medium", owasp="ASI08")],
                 )
                 runtime.record(
-                    actor=actor, action="fetch", target=current,
+                    actor=actor, action="fetch", target=target,
                     verdict="block", block_reason=decision.block_reason,
                     findings=decision.findings, latency_ms=_ms(t0),
                 )
@@ -367,7 +424,7 @@ def create_gateway_app(
                     [finding("data_budget", "fetch.per_domain_bytes", "medium", owasp="ASI08")],
                 )
                 runtime.record(
-                    actor=actor, action="fetch", target=current,
+                    actor=actor, action="fetch", target=target,
                     verdict="block", block_reason=decision.block_reason,
                     findings=decision.findings, latency_ms=_ms(t0),
                 )
@@ -386,18 +443,18 @@ def create_gateway_app(
                 )
                 if result.blocked:
                     runtime.record(
-                        actor=actor, action="fetch", target=current, verdict="block",
+                        actor=actor, action="fetch", target=target, verdict="block",
                         block_reason=result.block_reason, latency_ms=_ms(t0),
-                        **receipt_extras(result),
+                        **_merge_extras(url_extras, receipt_extras(result)),
                     )
                     return _block_response(
                         Decision.block(result.block_reason, result.findings), 403
                     )
                 if result.verdict in ("strip", "warn"):
                     runtime.record(
-                        actor=actor, action="fetch", target=current,
+                        actor=actor, action="fetch", target=target,
                         verdict=result.verdict, latency_ms=_ms(t0),
-                        **receipt_extras(result),
+                        **_merge_extras(url_extras, receipt_extras(result)),
                     )
                     return Response(
                         content=result.text.encode("utf-8"),
@@ -405,8 +462,9 @@ def create_gateway_app(
                         media_type=content_type,
                     )
 
-            runtime.record(actor=actor, action="fetch", target=current,
-                           verdict="allow", latency_ms=_ms(t0))
+            runtime.record(actor=actor, action="fetch", target=target,
+                           verdict="warn" if url_extras else "allow",
+                           latency_ms=_ms(t0), **url_extras)
             return Response(
                 content=body,
                 status_code=upstream.status_code,
@@ -418,7 +476,7 @@ def create_gateway_app(
             [finding("egress_policy", "fetch.redirect_limit", "medium", owasp="ASI02")],
         )
         runtime.record(
-            actor=actor, action="fetch", target=current,
+            actor=actor, action="fetch", target=target,
             verdict="block", block_reason=decision.block_reason,
             findings=decision.findings, latency_ms=_ms(t0),
         )
