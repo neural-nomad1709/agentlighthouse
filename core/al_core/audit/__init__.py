@@ -114,9 +114,9 @@ class Ledger:
     def next_seq(self) -> int:
         return self._signer.next_seq
 
-    def last_config_hash(self) -> str | None:
-        """policy_hash of the most recent config_change receipt, if any."""
-        return self._db.last_config_hash()
+    def last_config_change(self) -> dict[str, Any] | None:
+        """The most recent config_change receipt, if any."""
+        return self._db.last_config_change()
 
     def record(self, **fields: Any) -> dict[str, Any]:
         """Sign, append to JSONL (canonical), then mirror. Returns the receipt."""

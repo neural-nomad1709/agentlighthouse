@@ -12,13 +12,38 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 ## [Unreleased]
 
 ### Added
+- **Advisory mode.** When the egress bypass self-test is off (the default
+  outside `env: prod`), startup logs `advisory mode` and the signed boot
+  receipt carries the finding `egress.advisory_mode`: the mediator has not
+  proven that agents cannot bypass it. An existing ledger gets one such
+  receipt on the next boot.
+- The `al-core` wheel carries the shipped configs, the default-deny tool
+  policy and the built dashboard. `al init` writes `configs/` and `policies/`
+  into the working directory when they are absent (it never overwrites).
+- `publish-pypi.yml`: builds, smoke-tests and publishes `al-core`, `al-verify`
+  and `al-governance` to PyPI on a release (trusted publishing).
+- The container image is published for `linux/arm64` as well as `linux/amd64`.
+- CI runs the test suite and the three demos on Windows as well as Linux.
+- `docker-compose.build.yml`: builds the image from the checkout.
 ### Changed
+- **Upgrade note:** `docker-compose.yml` no longer builds the image. It pulls
+  the released, cosign-signed `ghcr.io/neural-nomad1709/agentlighthouse`. To
+  run a checkout, add `-f docker-compose.build.yml`. The pilot installers pull.
+- One image name. `amitkala/agentlighthouse` (Docker Hub) and
+  `agentlighthouse/al-core` are no longer referenced; `make sign` and
+  `scripts/release-image.sh` take the GHCR name.
+- `al version`, `al-verify --version` and the API metadata report the
+  installed package version (they said 0.1.0).
 - `al-core` now depends on `regex` (learned rules are compiled with it).
 ### Fixed
+- A wheel of `al-core` was missing the `al_core.keys` package (the repo's
+  `keys/` ignore rule dropped it), so an installed `al` could not start.
 - Signed posture attestations counted only the newest 500 receipts, so any
   longer period signed wrong numbers. They now count every receipt in the
   period (new paged `iter_receipts` on both audit backends).
 ### Security
+- The image build pins `python`, `node` and `uv` by digest (`uv` was
+  `:latest`).
 - Path argument constraints (`allow_prefixes` / `deny_prefixes`) now decode
   percent-encoding (repeatedly), strip a local `file://` scheme and collapse
   repeated slashes before the prefix check. `//etc/passwd`, `/%65tc/passwd`

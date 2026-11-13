@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import shutil
 from pathlib import Path
 
 import typer
@@ -20,6 +21,7 @@ from .. import __version__
 from ..config import load_settings
 from ..identity import IdentityRegistry
 from ..keys import generate_signing_key, load_or_create_signing_key, public_key_hex
+from ..resources import bundled
 
 app = typer.Typer(
     name="al",
@@ -69,9 +71,17 @@ def version() -> None:
 def init(
     config: Path = typer.Option(None, "--config", "-c", help="config YAML to validate"),
 ) -> None:
-    """Initialize a dev workspace: keys/, data/, .env, and a signing key."""
+    """Initialize a dev workspace: keys/, data/, .env, a signing key, and
+    (when absent) the shipped configs/ and policies/."""
     Path("keys").mkdir(exist_ok=True)
     DEFAULT_DATA.mkdir(exist_ok=True)
+
+    # A pip/uv install has no checkout to take these from; an existing
+    # directory is the operator's and is left alone.
+    for name in ("configs", "policies"):
+        if not Path(name).exists():
+            shutil.copytree(bundled(name), name)
+            typer.secho(f"wrote {name}/ (shipped defaults)", fg=typer.colors.GREEN)
 
     env_file = Path(".env")
     if not env_file.exists():

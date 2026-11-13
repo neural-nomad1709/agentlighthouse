@@ -74,7 +74,7 @@ document then adds its own phase-specific setup on top.
    uv run pytest -q
    ```
 
-   Expect `630 passed, 12 skipped` (skips are POSIX/Linux/Postgres-gated).
+   Expect no failures and 12 skipped (skips are POSIX/Linux/Postgres-gated).
 
 ### Resetting to a clean slate
 

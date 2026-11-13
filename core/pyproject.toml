@@ -41,3 +41,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["al_core"]
+# The repo .gitignore ignores every `keys/` directory (key material), and the
+# build honours it, which would drop the al_core.keys source package.
+artifacts = ["al_core/keys/*.py"]
+
+# Bundles configs/, policies/ and the built dashboard into the wheel
+# (core/hatch_build.py). Build al-core as a wheel only: an sdist would not
+# contain those repo-level directories.
+[tool.hatch.build.targets.wheel.hooks.custom]

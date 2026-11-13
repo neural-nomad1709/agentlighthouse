@@ -1,0 +1,87 @@
+name: publish-pypi
+
+# Publishes al-core, al-verify and al-governance to PyPI on a published
+# release, so `uv tool install al-core` works with no clone and no Node.
+#
+# The al-core wheel carries configs/, policies/ and the built dashboard
+# (core/hatch_build.py). It is built as a wheel only: an sdist would not
+# contain those repo-level directories.
+#
+# One-time setup on pypi.org, per project (al-core, al-verify, al-governance):
+# add a trusted publisher for this repository, workflow `publish-pypi.yml`,
+# environment `pypi`. No API token is stored anywhere.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build the dashboard
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: |
+          npm ci
+          npm run build
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Build the distributions
+        env:
+          AL_REQUIRE_DASHBOARD: "1" # a release wheel must not ship without it
+        run: |
+          uv build --wheel --package al-core -o dist
+          uv build --package al-verify -o dist
+          uv build --package al-governance -o dist
+
+      # Install the wheels into a clean environment, outside the checkout, and
+      # prove a workspace can be created, booted and verified from them alone.
+      - name: Smoke-test the wheels
+        run: |
+          uv venv "$RUNNER_TEMP/venv"
+          uv pip install --python "$RUNNER_TEMP/venv/bin/python" \
+            --find-links dist dist/al_core-*.whl dist/al_governance-*.whl
+          mkdir "$RUNNER_TEMP/ws" && cd "$RUNNER_TEMP/ws"
+          bin="$RUNNER_TEMP/venv/bin"
+          "$bin/al" init --config configs/balanced.yaml
+          "$bin/al" healthz --config configs/balanced.yaml
+          "$bin/al-verify" data/ledger.jsonl --pubkey keys/mediator_ed25519.pub
+          "$bin/al-gov" --help > /dev/null
+          "$bin/python" -c "from al_core.resources import bundled; assert (bundled('dashboard') / 'index.html').is_file()"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # PyPI trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Publish to PyPI
+        run: uv publish dist/*

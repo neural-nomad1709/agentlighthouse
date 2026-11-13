@@ -34,12 +34,12 @@ from .audit.pool import EvidencePool, RemotePlane
 from .capability.hitl import HitlGate
 from .capability.store import CapabilityStore
 from .principal import Authenticator, Principal
+from .resources import bundled
 from .runtime import Runtime
 
-# The built dashboard (Vite → frontend/dist) is served at /dashboard. The repo
-# root is two parents above al_core/.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_DASHBOARD_DIST = _REPO_ROOT / "frontend" / "dist"
+# The built dashboard (Vite → frontend/dist) is served at /dashboard: from
+# inside the wheel when installed, from the repo root in a checkout.
+_DASHBOARD_DIST = bundled("dashboard")
 
 
 def bearer(authorization: str | None) -> str | None:

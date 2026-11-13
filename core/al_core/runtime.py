@@ -54,6 +54,9 @@ log = logging.getLogger("al.runtime")
 # (config changes, kill switch, boot). A plain string per the receipt schema.
 MEDIATOR_ACTOR = "spiffe://local/al-core"
 
+# Finding on the boot receipt of a mediator that runs without the L0 proof.
+ADVISORY_RULE_ID = "egress.advisory_mode"
+
 
 class Runtime:
     def __init__(
@@ -166,16 +169,37 @@ class Runtime:
         if self._killswitch.engaged():
             log.critical("kill switch is engaged — the plane boots in deny-all")
 
+        # Advisory mode: with the bypass self-test off, this process has not
+        # proven that agents cannot reach the world without it. The mediator
+        # still decides and receipts everything sent through it, but only the
+        # network (compose agent-net, nftables) can make that mandatory.
+        advisory = self.l0_enforcement == "advisory"
+        if advisory:
+            log.warning(
+                "advisory mode: the egress bypass self-test is off, so nothing "
+                "here proves agents cannot bypass the mediator")
+
         # 6. Record the applied config only if it changed since the last boot,
         #    so repeated starts / health checks do not spam the ledger. Then arm
-        #    change-recording for hot reloads.
-        if self._ledger.last_config_hash() != self._config.current_hash:
+        #    change-recording for hot reloads. An advisory boot is recorded
+        #    once too, even when the hash is unchanged (an upgraded install).
+        last = self._ledger.last_config_change()
+        last_hash = last.get("policy_hash") if last else None
+        last_advisory = bool(last) and any(
+            f.get("rule_id") == ADVISORY_RULE_ID for f in last.get("findings") or [])
+        if last_hash != self._config.current_hash or (advisory and not last_advisory):
             self._ledger.record(
                 actor=MEDIATOR_ACTOR,
                 action="config_change",
                 target="config:boot",
                 verdict="allow",
                 policy_hash=self._config.current_hash,
+                **({"findings": [{
+                    "scanner": "egress",
+                    "rule_id": ADVISORY_RULE_ID,
+                    "severity": "medium",
+                    "owasp": "ASI02",
+                }]} if advisory else {}),
             )
         self._config.set_on_change(self._on_config_change)
 
@@ -203,6 +227,13 @@ class Runtime:
     @property
     def config_hash(self) -> str:
         return self._config.current_hash
+
+    @property
+    def l0_enforcement(self) -> str:
+        """``enforced`` when the egress bypass self-test gates boot (a boot
+        that got this far passed it), otherwise ``advisory``."""
+        s = self.settings
+        return "enforced" if self_test_enabled(s.egress, s.env) else "advisory"
 
     @property
     def content_gate(self) -> ContentGate:

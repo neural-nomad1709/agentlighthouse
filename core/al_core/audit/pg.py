@@ -169,11 +169,11 @@ class PostgresMirror:
         row = self._rows("SELECT MAX(seq) FROM events", [])[0][0]
         return int(row) if row is not None else None
 
-    def last_config_hash(self) -> str | None:
+    def last_config_change(self) -> dict[str, Any] | None:
         rows = self._rows(
             "SELECT receipt_json FROM events WHERE action='config_change' "
             "ORDER BY seq DESC LIMIT 1", [])
-        return json.loads(rows[0][0]).get("policy_hash") if rows else None
+        return json.loads(rows[0][0]) if rows else None
 
     def _group_count(self, column: str, extra: str = "",
                      org: str | None = None) -> dict[str, int]:

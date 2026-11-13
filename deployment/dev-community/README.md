@@ -38,7 +38,7 @@ network). Most dev-community users want option A and add B for demos.
 4. Prove the install (the release gate is the acceptance bar):
 
    ```powershell
-   uv run pytest -q          # expect: 630 passed, 12 skipped
+   uv run pytest -q          # expect: 0 failed, 12 skipped
    make release              # full suite + all three demos, if make is available
    ```
 

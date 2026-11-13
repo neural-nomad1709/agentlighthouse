@@ -208,15 +208,13 @@ class SqliteMirror:
             row = self._conn.execute("SELECT MAX(seq) AS m FROM events").fetchone()
         return row["m"] if row and row["m"] is not None else None
 
-    def last_config_hash(self) -> str | None:
+    def last_config_change(self) -> dict[str, Any] | None:
         with self._lock:
             row = self._conn.execute(
                 "SELECT receipt_json FROM events WHERE action='config_change' "
                 "ORDER BY seq DESC LIMIT 1"
             ).fetchone()
-        if not row:
-            return None
-        return json.loads(row["receipt_json"]).get("policy_hash")
+        return json.loads(row["receipt_json"]) if row else None
 
     def recent(self, limit: int = 50) -> list[dict[str, Any]]:
         with self._lock:

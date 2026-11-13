@@ -150,6 +150,63 @@ def test_dev_auto_skips_probe(tmp_path):
     assert calls == []  # dev laptops legitimately have direct internet
 
 
+# -- advisory mode: the choke-point is not proven by this process ---------------
+
+def _boot_receipt(tmp_path) -> dict:
+    lines = (tmp_path / "data" / "ledger.jsonl").read_text(encoding="utf-8").splitlines()
+    boots = [r for r in map(json.loads, lines) if r["target"] == "config:boot"]
+    return boots[-1]
+
+
+def test_boot_without_the_self_test_says_advisory_in_log_and_receipt(tmp_path, caplog):
+    """With the bypass self-test off, nothing proves agents cannot walk around
+    the mediator. The log and the signed boot receipt both say so."""
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("mode: balanced\nenv: dev\n", encoding="utf-8")
+    with caplog.at_level("WARNING", logger="al.runtime"):
+        rt = Runtime(cfg, data_dir=tmp_path / "data")
+    rt.close()
+
+    assert rt.l0_enforcement == "advisory"
+    assert any("advisory mode" in r.getMessage() for r in caplog.records)
+    receipt = _boot_receipt(tmp_path)
+    assert receipt["action"] == "config_change" and receipt["verdict"] == "allow"
+    (f,) = receipt["findings"]
+    assert f["rule_id"] == "egress.advisory_mode" and f["scanner"] == "egress"
+
+
+def test_boot_with_a_passing_self_test_is_not_advisory(tmp_path, caplog):
+    with caplog.at_level("WARNING", logger="al.runtime"):
+        rt = _prod_runtime(tmp_path, _connect_refused)
+    rt.close()
+
+    assert rt.l0_enforcement == "enforced"
+    assert not any("advisory mode" in r.getMessage() for r in caplog.records)
+    assert not _boot_receipt(tmp_path).get("findings")
+
+
+def test_a_ledger_from_before_advisory_receipts_gets_one_on_next_boot(tmp_path):
+    """An upgraded install whose last boot receipt predates the advisory
+    finding still gets it, once: the config hash alone does not change."""
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("mode: balanced\nenv: dev\n", encoding="utf-8")
+    rt = Runtime(cfg, data_dir=tmp_path / "data")
+    # What a pre-upgrade boot wrote: same config hash, no finding.
+    rt.record(actor="spiffe://local/al-core", action="config_change",
+              target="config:boot", verdict="allow", policy_hash=rt.config_hash)
+    before = rt.ledger.next_seq
+    rt.close()
+
+    rt2 = Runtime(cfg, data_dir=tmp_path / "data")
+    assert rt2.ledger.next_seq == before + 1
+    assert _boot_receipt(tmp_path)["findings"][0]["rule_id"] == "egress.advisory_mode"
+    rt2.close()
+
+    rt3 = Runtime(cfg, data_dir=tmp_path / "data")  # and only once
+    assert rt3.ledger.next_seq == before + 1
+    rt3.close()
+
+
 def test_dev_enabled_runs_probe_and_refuses(tmp_path):
     cfg = tmp_path / "cfg.yaml"
     cfg.write_text(

@@ -11,7 +11,7 @@ independently verifiable evidence** of every decision it takes.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)
-![Tests](https://img.shields.io/badge/tests-699-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-818-brightgreen.svg)
 ![Evidence](https://img.shields.io/badge/evidence-Ed25519%20%2B%20RFC%208785-informational.svg)
 ![Status](https://img.shields.io/badge/status-pilot%2Fdesign--partner-orange.svg)
 [![Image](https://img.shields.io/badge/image-ghcr.io%2Fneural--nomad1709%2Fagentlighthouse-2496ED.svg?logo=docker&logoColor=white)](https://github.com/neural-nomad1709/agentlighthouse/pkgs/container/agentlighthouse)
@@ -601,7 +601,12 @@ Step-by-step guides for Windows and Linux, at all three sizes, are in
   and L0 nftables enforcement on agent hosts.
 - **Windows is a first-class development and evaluation platform.** The full
   suite, all three demos, the native gateway, and the Docker Desktop topology run
-  on Windows — the dev-community tier.
+  on Windows — the dev-community tier. CI runs the suite and the demos on
+  `windows-latest` as well as `ubuntu-latest`.
+- **A native run is advisory.** Outside the container topology nothing stops an
+  agent from skipping the mediator. When the egress bypass self-test is off
+  (the default outside `env: prod`), startup logs `advisory mode` and the signed
+  boot receipt carries the finding `egress.advisory_mode`.
 - **Every tier is self-hosted.** "Cloud" means your own IaaS VMs; there is no
   vendor-hosted SaaS.
 
@@ -767,13 +772,18 @@ flowchart LR
     SIGN --> SBOM["attach SPDX SBOM attestation"]
 ```
 
-- **`ci.yml`** runs on every push and pull request: install, full test suite,
-  the release gate (`make demo`, all three MCP transports), the memory and A2A
-  demos, and an image-build-from-clean-clone job that proves a clone is
-  sufficient to deploy.
+- **`ci.yml`** runs on every push and pull request, on Linux and Windows:
+  install, full test suite, the release gate (`make demo`, all three MCP
+  transports), the memory and A2A demos, and an image-build-from-clean-clone
+  job that proves a clone is sufficient to deploy.
 - **`publish-image.yml`** runs on a published release: build and push to
-  `ghcr.io`, cosign keyless (OIDC) signing of the image **digest**, and an SPDX
-  SBOM attestation.
+  `ghcr.io` for `linux/amd64` and `linux/arm64`, cosign keyless (OIDC) signing
+  of the image **digest**, and an SPDX SBOM attestation. Base images and `uv`
+  are pinned by digest in the `Dockerfile`.
+- **`publish-pypi.yml`** runs on a published release: builds the three
+  packages, smoke-tests the wheels in a clean environment, and publishes them
+  with PyPI trusted publishing. It has not run yet, so the packages are not on
+  PyPI today.
 
 Verify a release:
 
@@ -855,6 +865,9 @@ statement; the compliance mappings defer to it.
 - **The forward proxy tunnels TLS opaquely.** It enforces on destination host,
   port, and pinned IP; it cannot see inside a CONNECT tunnel, so the content gate
   does not apply there.
+- **A native (non-container) run enforces nothing at the OS level.** It is
+  advisory: it mediates and receipts what agents send through it, and says so
+  at startup. Hardened systemd / Windows service deployments are not shipped.
 - **L0 nftables enforcement** is proven in Docker (`internal: true` networks) and
   by unit tests, but has not been validated on a bare-metal Linux host.
 - **Pilot outcomes** — false-positive rate and zero-workflow-breakage — need a
@@ -875,7 +888,7 @@ gap that is worse than described very much is.
 
 ## Testing
 
-- **711 automated tests** (`uv run pytest -q`): 699 pass in a standard
+- **830 automated tests** (`uv run pytest -q`): 818 pass in a standard
   environment, with 12 skipped (Postgres-backed mirror tests unless a live-server
   DSN is provided, plus Linux-only nftables/netns and POSIX-mode tests). A 9-test
   Playwright dashboard end-to-end suite lives in `frontend/`.
