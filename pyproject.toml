@@ -9,9 +9,9 @@ description = "AgentLighthouse — runtime security & governance plane for AI ag
 authors = [{ name = "Amit Kala" }]
 requires-python = ">=3.12"
 dependencies = [
-    "al-core",
-    "al-verify",
-    "al-governance",
+    "agentlighthouse-core",
+    "agentlighthouse-verify",
+    "agentlighthouse-governance",
 ]
 
 [project.urls]
@@ -22,9 +22,9 @@ Repository = "https://github.com/neural-nomad1709/agentlighthouse"
 package = false
 
 [tool.uv.sources]
-al-core = { workspace = true }
-al-verify = { workspace = true }
-al-governance = { workspace = true }
+agentlighthouse-core = { workspace = true }
+agentlighthouse-verify = { workspace = true }
+agentlighthouse-governance = { workspace = true }
 
 [tool.uv.workspace]
 members = ["core", "verify", "governance"]

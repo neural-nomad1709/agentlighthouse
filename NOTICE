@@ -50,7 +50,7 @@ Runtime dependencies (see uv.lock for exact pinned versions + hashes):
   - pyyaml                (MIT)                          config parsing
 
 Optional runtime dependencies (extras):
-  - psycopg[binary]       (LGPL-3.0-or-later)            al-core[postgres]: the
+  - psycopg[binary]       (LGPL-3.0-or-later)            agentlighthouse-core[postgres]: the
     concurrent-writer evidence mirror. Kept OPTIONAL and imported lazily so a
     default (SQLite) deployment neither installs nor links it; AgentLighthouse
     calls it across the standard DB-API/psycopg interface only.

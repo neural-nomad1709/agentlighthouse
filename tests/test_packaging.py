@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import tomllib
 import zipfile
 from pathlib import Path
 
 import pytest
+import yaml
 from typer.testing import CliRunner
 
 from al_core import resources
@@ -68,14 +70,43 @@ def test_init_never_overwrites_an_operators_config(tmp_path, monkeypatch):
     assert not (tmp_path / "configs" / "audit.yaml").exists()  # dir left alone
 
 
+# PyPI project name -> (workspace directory, GitHub environment of its trusted
+# publisher). PyPI refuses `al-core` and friends as look-alikes of existing
+# projects, and allows one pending publisher per (repo, workflow, environment),
+# so each project publishes from its own environment.
+PYPI_PROJECTS = {
+    "agentlighthouse-core": ("core", "pypi"),
+    "agentlighthouse-verify": ("verify", "pypi-verify"),
+    "agentlighthouse-governance": ("governance", "agentlighthouse-governance"),
+}  # the environment names are the ones registered on pypi.org
+
+
+def test_each_package_carries_its_pypi_project_name():
+    for project, (directory, _) in PYPI_PROJECTS.items():
+        meta = tomllib.loads((ROOT / directory / "pyproject.toml").read_text(encoding="utf-8"))
+        assert meta["project"]["name"] == project
+
+
+def test_each_package_is_published_from_its_own_environment():
+    workflow = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "publish-pypi.yml").read_text(encoding="utf-8"))
+    publish = workflow["jobs"]["publish"]
+    assert publish["environment"] == "${{ matrix.environment }}"
+    assert "${{ matrix.dist }}" in publish["steps"][-1]["run"]
+    published = {(m["dist"], m["environment"]) for m in publish["strategy"]["matrix"]["include"]}
+    assert published == {
+        (project.replace("-", "_"), environment)
+        for project, (_, environment) in PYPI_PROJECTS.items()}
+
+
 @pytest.mark.skipif(shutil.which("uv") is None, reason="needs uv to build the wheel")
 def test_the_wheel_carries_configs_policy_and_dashboard(tmp_path):
     out = tmp_path / "dist"
     built = subprocess.run(
-        ["uv", "build", "--wheel", "--package", "al-core", "-o", str(out)],
+        ["uv", "build", "--wheel", "--package", "agentlighthouse-core", "-o", str(out)],
         cwd=ROOT, capture_output=True, text=True)
     assert built.returncode == 0, built.stderr
-    (wheel,) = out.glob("al_core-*.whl")
+    (wheel,) = out.glob("agentlighthouse_core-*.whl")
     names = set(zipfile.ZipFile(wheel).namelist())
     assert "al_core/_bundled/configs/balanced.yaml" in names
     assert "al_core/_bundled/configs/audit.yaml" in names

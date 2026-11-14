@@ -4,7 +4,7 @@
 # Ed25519; RFC 8785 (JCS) canonicalization and the hash chain are implemented
 # here from scratch so the trust surface is small and auditable.
 [project]
-name = "al-verify"
+name = "agentlighthouse-verify"
 version = "0.3.0"
 description = "Standalone, dependency-minimal verifier for AgentLighthouse receipts"
 authors = [{ name = "Amit Kala" }]

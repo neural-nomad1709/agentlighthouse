@@ -5,9 +5,9 @@ requires-python = ">=3.12"
 [manifest]
 members = [
     "agentlighthouse",
-    "al-core",
-    "al-governance",
-    "al-verify",
+    "agentlighthouse-core",
+    "agentlighthouse-governance",
+    "agentlighthouse-verify",
 ]
 
 [[package]]
@@ -15,9 +15,9 @@ name = "agentlighthouse"
 version = "0.3.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "al-core" },
-    { name = "al-governance" },
-    { name = "al-verify" },
+    { name = "agentlighthouse-core" },
+    { name = "agentlighthouse-governance" },
+    { name = "agentlighthouse-verify" },
 ]
 
 [package.dev-dependencies]
@@ -31,9 +31,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "al-core", editable = "core" },
-    { name = "al-governance", editable = "governance" },
-    { name = "al-verify", editable = "verify" },
+    { name = "agentlighthouse-core", editable = "core" },
+    { name = "agentlighthouse-governance", editable = "governance" },
+    { name = "agentlighthouse-verify", editable = "verify" },
 ]
 
 [package.metadata.requires-dev]
@@ -46,11 +46,11 @@ dev = [
 ]
 
 [[package]]
-name = "al-core"
+name = "agentlighthouse-core"
 version = "0.3.0"
 source = { editable = "core" }
 dependencies = [
-    { name = "al-verify" },
+    { name = "agentlighthouse-verify" },
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -73,7 +73,7 @@ scanners = [
 
 [package.metadata]
 requires-dist = [
-    { name = "al-verify", editable = "verify" },
+    { name = "agentlighthouse-verify", editable = "verify" },
     { name = "cryptography", specifier = ">=43" },
     { name = "detect-secrets", marker = "extra == 'scanners'", specifier = ">=1.5" },
     { name = "fastapi", specifier = ">=0.111" },
@@ -90,12 +90,12 @@ requires-dist = [
 provides-extras = ["scanners", "postgres"]
 
 [[package]]
-name = "al-governance"
+name = "agentlighthouse-governance"
 version = "0.3.0"
 source = { editable = "governance" }
 dependencies = [
-    { name = "al-core" },
-    { name = "al-verify" },
+    { name = "agentlighthouse-core" },
+    { name = "agentlighthouse-verify" },
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "typer" },
@@ -109,8 +109,8 @@ postgres = [
 
 [package.metadata]
 requires-dist = [
-    { name = "al-core", editable = "core" },
-    { name = "al-verify", editable = "verify" },
+    { name = "agentlighthouse-core", editable = "core" },
+    { name = "agentlighthouse-verify", editable = "verify" },
     { name = "cryptography", specifier = ">=43" },
     { name = "fastapi", specifier = ">=0.111" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2" },
@@ -120,7 +120,7 @@ requires-dist = [
 provides-extras = ["postgres"]
 
 [[package]]
-name = "al-verify"
+name = "agentlighthouse-verify"
 version = "0.3.0"
 source = { editable = "verify" }
 dependencies = [

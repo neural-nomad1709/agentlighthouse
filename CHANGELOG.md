@@ -20,8 +20,9 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 - The `al-core` wheel carries the shipped configs, the default-deny tool
   policy and the built dashboard. `al init` writes `configs/` and `policies/`
   into the working directory when they are absent (it never overwrites).
-- `publish-pypi.yml`: builds, smoke-tests and publishes `al-core`, `al-verify`
-  and `al-governance` to PyPI on a release (trusted publishing).
+- `publish-pypi.yml`: builds, smoke-tests and publishes the three packages to
+  PyPI on a release (trusted publishing), as `agentlighthouse-core`,
+  `agentlighthouse-verify` and `agentlighthouse-governance`.
 - The container image is published for `linux/arm64` as well as `linux/amd64`.
 - CI runs the test suite and the three demos on Windows as well as Linux.
 - `docker-compose.build.yml`: builds the image from the checkout.
@@ -70,6 +71,12 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 - `al version`, `al-verify --version` and the API metadata report the
   installed package version (they said 0.1.0).
 - `al-core` now depends on `regex` (learned rules are compiled with it).
+- **Upgrade note:** the Python distributions are renamed `al-core` ->
+  `agentlighthouse-core`, `al-verify` -> `agentlighthouse-verify` and
+  `al-governance` -> `agentlighthouse-governance` (PyPI refuses the short
+  names as look-alikes of existing projects). Extras follow:
+  `agentlighthouse-core[postgres]`, `agentlighthouse-core[scanners]`. The
+  commands (`al`, `al-verify`, `al-gov`) and the import names are unchanged.
 ### Fixed
 - A wheel of `al-core` was missing the `al_core.keys` package (the repo's
   `keys/` ignore rule dropped it), so an installed `al` could not start.

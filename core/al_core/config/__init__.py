@@ -92,7 +92,7 @@ class DataBudgetConfig(BaseModel):
 
 
 class DetectSecretsConfig(BaseModel):
-    """Optional detect-secrets adapter (install with ``al-core[scanners]``).
+    """Optional detect-secrets adapter (install with ``agentlighthouse-core[scanners]``).
     Opt-in: the library is an optional dependency, and enabling it without
     the package installed refuses at boot rather than silently skipping."""
 

@@ -93,7 +93,7 @@ def test_image_excludes_the_governance_layer(dockerfile):
     member, which broke the image build until the frozen sync skipped it —
     pin the fix."""
     assert "COPY governance" not in dockerfile
-    assert "--no-install-package al-governance" in dockerfile
+    assert "--no-install-package agentlighthouse-governance" in dockerfile
 
 
 def test_image_base_is_the_pinned_slim_python(dockerfile):

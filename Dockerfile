@@ -60,7 +60,7 @@ COPY spec/ spec/
 COPY configs/ configs/
 COPY policies/ policies/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-package al-governance
+    uv sync --frozen --no-dev --no-install-package agentlighthouse-governance
 
 # -- core runtime: no dashboard ------------------------------------------------
 FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b AS core

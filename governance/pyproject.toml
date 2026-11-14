@@ -1,15 +1,15 @@
 # al-governance — multi-org governance layer (MIT). Depends on al-core; al-core
 # never depends on this.
 [project]
-name = "al-governance"
+name = "agentlighthouse-governance"
 version = "0.3.0"
 description = "AgentLighthouse governance: org tenancy, RBAC, budgets, signed posture attestation"
 authors = [{ name = "Amit Kala" }]
 requires-python = ">=3.12"
 license = "MIT"
 dependencies = [
-    "al-core",
-    "al-verify",
+    "agentlighthouse-core",
+    "agentlighthouse-verify",
     "cryptography>=43",
     "fastapi>=0.111",
     "typer>=0.12",
@@ -27,8 +27,8 @@ postgres = ["psycopg[binary]>=3.2"]
 al-gov = "al_governance.cli:app"
 
 [tool.uv.sources]
-al-core = { workspace = true }
-al-verify = { workspace = true }
+agentlighthouse-core = { workspace = true }
+agentlighthouse-verify = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

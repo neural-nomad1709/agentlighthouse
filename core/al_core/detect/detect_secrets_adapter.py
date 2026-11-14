@@ -18,7 +18,7 @@ NOT used: they flag ordinary prose, and AL ships its own tuned EntropyScanner.
 The curated list below keeps the high-signal, typed detectors.
 
 Opt-in via config (``scanner.detect_secrets.enabled: true``) because the
-library is an optional dependency: install with ``al-core[scanners]``.
+library is an optional dependency: install with ``agentlighthouse-core[scanners]``.
 Constructing the scanner without the library raises ImportError, so an
 operator who enabled it refuses at boot rather than silently skipping.
 """

@@ -1,13 +1,13 @@
 # al-core — AgentLighthouse data + control plane (MIT).
 [project]
-name = "al-core"
+name = "agentlighthouse-core"
 version = "0.3.0"
 description = "AgentLighthouse core: proxies, scanners, policy engine, receipts, CLI"
 authors = [{ name = "Amit Kala" }]
 requires-python = ">=3.12"
 license = "MIT"
 dependencies = [
-    "al-verify",
+    "agentlighthouse-verify",
     "cryptography>=43",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
@@ -33,7 +33,7 @@ postgres = ["psycopg[binary]>=3.2"]
 al = "al_core.cli.main:app"
 
 [tool.uv.sources]
-al-verify = { workspace = true }
+agentlighthouse-verify = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

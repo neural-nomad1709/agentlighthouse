@@ -11,7 +11,7 @@ independently verifiable evidence** of every decision it takes.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)
-![Tests](https://img.shields.io/badge/tests-874-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-876-brightgreen.svg)
 ![Evidence](https://img.shields.io/badge/evidence-Ed25519%20%2B%20RFC%208785-informational.svg)
 ![Status](https://img.shields.io/badge/status-pilot%2Fdesign--partner-orange.svg)
 [![Image](https://img.shields.io/badge/image-ghcr.io%2Fneural--nomad1709%2Fagentlighthouse-2496ED.svg?logo=docker&logoColor=white)](https://github.com/neural-nomad1709/agentlighthouse/pkgs/container/agentlighthouse)
@@ -439,7 +439,7 @@ set, not an aspiration.
 | Runtime | Python 3.12+, FastAPI/Starlette, httpx/httpcore, Uvicorn, Typer/Click |
 | Configuration and validation | Pydantic v2, pydantic-settings, PyYAML, watchfiles (hot reload) |
 | Cryptography | `cryptography` (Ed25519 signing/verify); RFC 8785 JCS canonicalization (stdlib-only reference implementation) |
-| Evidence mirror | SQLite (WAL) by default; optional `al-core[postgres]` (psycopg, lazy-imported) for concurrent writers |
+| Evidence mirror | SQLite (WAL) by default; optional `agentlighthouse-core[postgres]` (psycopg, lazy-imported) for concurrent writers |
 | Dashboard | Vite + React + TypeScript, built to static assets; Playwright for e2e (build toolchain only; prebuilt into the image) |
 | Build and packaging | uv workspace (members: `core`, `verify`, `governance`), Hatchling, multi-stage Docker |
 | Supply chain | SPDX SBOM (syft), cosign keyless signing and attestation |
@@ -855,7 +855,7 @@ statement; the compliance mappings defer to it.
   scanners are dependency-free regex and heuristics behind the same `Scanner`
   interface. Of LLM Guard's 24 scanners this covers four fully and four
   partially, and none of the ML-judgement ones. A **detect-secrets adapter**
-  ships behind that interface (opt-in: `al-core[scanners]` +
+  ships behind that interface (opt-in: `agentlighthouse-core[scanners]` +
   `scanner.detect_secrets.enabled: true`) — its curated keyword/format
   detectors, not the noisy generic-entropy ones, and it is still pattern
   matching, not ML judgement.
@@ -888,7 +888,7 @@ gap that is worse than described very much is.
 
 ## Testing
 
-- **886 automated tests** (`uv run pytest -q`): 874 pass in a standard
+- **888 automated tests** (`uv run pytest -q`): 876 pass in a standard
   environment, with 12 skipped (Postgres-backed mirror tests unless a live-server
   DSN is provided, plus Linux-only nftables/netns and POSIX-mode tests). A 9-test
   Playwright dashboard end-to-end suite lives in `frontend/`.

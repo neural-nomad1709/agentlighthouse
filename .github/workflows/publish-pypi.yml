@@ -1,15 +1,19 @@
 name: publish-pypi
 
-# Publishes al-core, al-verify and al-governance to PyPI on a published
-# release, so `uv tool install al-core` works with no clone and no Node.
+# Publishes the three packages to PyPI on a published release, so
+# `uv tool install agentlighthouse-core` works with no clone and no Node.
+# The PyPI names are agentlighthouse-core, -verify and -governance: PyPI
+# refuses al-core and friends as look-alikes of existing projects.
 #
-# The al-core wheel carries configs/, policies/ and the built dashboard
+# The core wheel carries configs/, policies/ and the built dashboard
 # (core/hatch_build.py). It is built as a wheel only: an sdist would not
 # contain those repo-level directories.
 #
-# One-time setup on pypi.org, per project (al-core, al-verify, al-governance):
-# add a trusted publisher for this repository, workflow `publish-pypi.yml`,
-# environment `pypi`. No API token is stored anywhere.
+# One-time setup on pypi.org, per project: add a trusted publisher for this
+# repository, workflow `publish-pypi.yml`, and the project's own environment
+# (the `publish` matrix below). PyPI allows one pending publisher per
+# (repository, workflow, environment), hence one environment per project.
+# No API token is stored anywhere.
 
 on:
   release:
@@ -45,9 +49,9 @@ jobs:
         env:
           AL_REQUIRE_DASHBOARD: "1" # a release wheel must not ship without it
         run: |
-          uv build --wheel --package al-core -o dist
-          uv build --package al-verify -o dist
-          uv build --package al-governance -o dist
+          uv build --wheel --package agentlighthouse-core -o dist
+          uv build --package agentlighthouse-verify -o dist
+          uv build --package agentlighthouse-governance -o dist
 
       # Install the wheels into a clean environment, outside the checkout, and
       # prove a workspace can be created, booted and verified from them alone.
@@ -55,7 +59,7 @@ jobs:
         run: |
           uv venv "$RUNNER_TEMP/venv"
           uv pip install --python "$RUNNER_TEMP/venv/bin/python" \
-            --find-links dist dist/al_core-*.whl dist/al_governance-*.whl
+            --find-links dist dist/agentlighthouse_core-*.whl dist/agentlighthouse_governance-*.whl
           mkdir "$RUNNER_TEMP/ws" && cd "$RUNNER_TEMP/ws"
           bin="$RUNNER_TEMP/venv/bin"
           "$bin/al" init --config configs/balanced.yaml
@@ -72,7 +76,17 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    environment: pypi
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dist: agentlighthouse_core
+            environment: pypi
+          - dist: agentlighthouse_verify
+            environment: pypi-verify
+          - dist: agentlighthouse_governance
+            environment: agentlighthouse-governance
+    environment: ${{ matrix.environment }}
     permissions:
       id-token: write # PyPI trusted publishing
     steps:
@@ -84,4 +98,4 @@ jobs:
       - uses: astral-sh/setup-uv@v5
 
       - name: Publish to PyPI
-        run: uv publish dist/*
+        run: uv publish dist/${{ matrix.dist }}-*
