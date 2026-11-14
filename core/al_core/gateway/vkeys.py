@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..audit.db import SqliteMirror
+from ..identity import require_org_slug
 from ..receipt import utcnow_iso
 
 TOKEN_PREFIX = "alk_"
@@ -108,6 +109,8 @@ class VirtualKeyStore:
         max_tokens_per_day: int | None = None,
     ) -> tuple[VirtualKey, str]:
         """Mint a key. Returns (record, plaintext token) — token is not recoverable."""
+        if org is not None:
+            require_org_slug(org)
         token = TOKEN_PREFIX + secrets.token_urlsafe(32)
         vk = VirtualKey(
             key_id="vk_" + secrets.token_hex(8),

@@ -22,6 +22,7 @@ import secrets
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from al_core.identity import require_org_slug
 from al_core.principal import CAPABILITIES, Principal
 from al_core.receipt import utcnow_iso
 
@@ -76,6 +77,7 @@ class OrgStore:
             raise ValueError(f"org already exists: {org}")
         if org == "system":
             raise ValueError("'system' is reserved (non-agent actors)")
+        require_org_slug(org)
         self._orgs[org] = {"org": org, "display_name": display_name or org,
                            "created_ts": utcnow_iso()}
         self._save()

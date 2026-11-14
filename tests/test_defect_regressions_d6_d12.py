@@ -360,3 +360,72 @@ def test_d11_audit_mode_observes_a_secret_in_the_fetch_url(tmp_path):
     assert receipts[0]["verdict"] == "warn"
     assert "secrets.aws_access_key" in json.dumps(receipts[0]["findings"])
     assert AWS_KEY not in json.dumps(receipts)
+
+# -- tenant scoping (D8) ---------------------------------------------------------
+
+
+def _mirror(*actors: str):
+    from al_core.audit.db import SqliteMirror
+
+    db = SqliteMirror(":memory:")
+    for seq, actor in enumerate(actors):
+        db.upsert_event({
+            "seq": seq, "ts": "2026-01-01T00:00:00.000Z", "actor": actor,
+            "action": "fetch", "target": "t", "verdict": "allow",
+            "prev_hash": "p", "record_hash": f"h{seq}"})
+    return db
+
+
+TENANTS = ("spiffe://acme/agent/bot", "spiffe://acme/user/alice",
+           "spiffe://acme-eu/agent/bot", "spiffe://globex/agent/bot", "user:ops")
+
+
+@pytest.mark.parametrize("slug", ["%", "acm_", "a%", "_____", "acme/agent", "%/agent"])
+def test_d8_an_org_slug_with_a_wildcard_or_slash_reads_no_tenant(slug):
+    """`actor LIKE 'spiffe://<org>/%'` let a scope of `%` or `acm_` read every
+    tenant, and `acme/agent` read acme's agents."""
+    db = _mirror(*TENANTS)
+    assert db.count_events(org=slug) == 0
+    assert db.recent_filtered(org=slug) == []
+    assert db.actor_counts(org=slug) == {}
+
+
+def test_d8_an_org_sees_exactly_its_own_actors():
+    db = _mirror(*TENANTS)
+    assert set(db.actor_counts(org="acme")) == {
+        "spiffe://acme/agent/bot", "spiffe://acme/user/alice"}
+    assert set(db.actor_counts(org="acme-eu")) == {"spiffe://acme-eu/agent/bot"}
+    assert set(db.actor_counts(org="system")) == {"user:ops"}
+    assert db.count_events() == len(TENANTS)
+
+
+def test_d8_postgres_scopes_by_exact_prefix_too():
+    from al_core.audit import pg
+
+    clauses, params = pg._org_filter("acme")
+    assert "LIKE" not in clauses[0]
+    assert params == [len("spiffe://acme/"), "spiffe://acme/"]
+    assert pg._org_filter("acm_")[1] == [len("spiffe://acm_/"), "spiffe://acm_/"]
+    assert pg._org_filter("acme/agent") == (["FALSE"], [])
+
+
+@pytest.mark.parametrize("slug", ["%", "acm%", "a/b", "Acme", "", "../x", "a b", "-acme"])
+def test_d8_an_invalid_org_slug_is_refused_at_creation(tmp_path, slug):
+    from al_governance.tenancy import OrgStore
+
+    store = OrgStore(tmp_path / "orgs.json")
+    with pytest.raises(ValueError):
+        store.create_org(slug)
+    assert store.orgs() == []
+
+
+def test_d8_a_virtual_key_cannot_be_issued_into_an_invalid_org(tmp_path):
+    from al_core.gateway.vkeys import VirtualKeyStore
+
+    store = VirtualKeyStore(tmp_path / "vkeys.json")
+    with pytest.raises(ValueError):
+        store.issue("mallory", org="acme/agent")
+    with pytest.raises(ValueError):
+        store.issue("mallory", org="%")
+    assert store.list() == []
+    assert store.issue("alice", org="acme")[0].actor == "spiffe://acme/user/alice"

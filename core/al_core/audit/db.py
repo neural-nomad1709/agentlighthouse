@@ -38,7 +38,20 @@ def _org_filter(org: str | None) -> tuple[list[str], list[Any]]:
         return [], []
     if org == "system":  # non-spiffe actors (mediator, console users)
         return ["actor NOT LIKE 'spiffe://%'"], []
-    return ["actor LIKE ?"], [f"spiffe://{org}/%"]
+    prefix = actor_prefix(org)
+    if prefix is None:
+        return ["FALSE"], []
+    return ["substr(actor, 1, ?) = ?"], [len(prefix), prefix]
+
+
+def actor_prefix(org: str) -> str | None:
+    """``spiffe://<org>/``, the literal start of every actor in ``org``. None
+    when no actor can belong to it: a scope holding ``/`` is not an org, it
+    reaches into another org's namespace.
+
+    Callers compare this prefix exactly. A ``LIKE`` pattern built from the org
+    would treat ``%`` and ``_`` in it as wildcards across tenants."""
+    return None if not org or "/" in org else f"spiffe://{org}/"
 
 
 _SCHEMA = """

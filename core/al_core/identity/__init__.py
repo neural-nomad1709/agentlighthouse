@@ -26,7 +26,21 @@ from ..keys import public_key_hex
 from ..receipt import utcnow_iso
 
 # spiffe://<org>/agent/<name> — org and name are DNS/label-ish tokens.
-_SPIFFE_RE = re.compile(r"^spiffe://(?P<org>[a-z0-9][a-z0-9._-]*)/agent/(?P<name>[a-z0-9][a-z0-9._-]*)$")
+_LABEL = r"[a-z0-9][a-z0-9._-]*"
+_SPIFFE_RE = re.compile(rf"^spiffe://(?P<org>{_LABEL})/agent/(?P<name>{_LABEL})$")
+_ORG_RE = re.compile(rf"^{_LABEL}$")
+
+
+def require_org_slug(org: str) -> str:
+    """``org`` if it can be the org of a SPIFFE id, else ``ValueError``.
+
+    Everything that names a tenant goes through this, so the org in a receipt
+    actor is always one of these tokens and never carries ``/`` or a wildcard."""
+    if not isinstance(org, str) or not _ORG_RE.match(org):
+        raise ValueError(
+            f"invalid org slug: {org!r} (lowercase letters, digits, '.', '_', '-'; "
+            "must start with a letter or digit)")
+    return org
 
 
 class IdentityError(Exception):
@@ -172,5 +186,6 @@ __all__ = [
     "InvalidSpiffeId",
     "IssuedCredentials",
     "parse_spiffe",
+    "require_org_slug",
     "spiffe_id",
 ]

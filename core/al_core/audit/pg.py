@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 from typing import Any, Iterable, Iterator
 
-from .db import org_of
+from .db import actor_prefix, org_of
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -55,7 +55,10 @@ def _org_filter(org: str | None) -> tuple[list[str], list[Any]]:
         return [], []
     if org == "system":
         return ["actor NOT LIKE 'spiffe://%%'"], []
-    return ["actor LIKE %s"], [f"spiffe://{org}/%"]
+    prefix = actor_prefix(org)
+    if prefix is None:
+        return ["FALSE"], []
+    return ["substr(actor, 1, %s) = %s"], [len(prefix), prefix]
 
 
 class PostgresMirror:
