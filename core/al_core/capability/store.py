@@ -58,8 +58,16 @@ CREATE TABLE IF NOT EXISTS taint (
 """
 
 
+#: File name of the approvals store inside ``control.approvals_dir``.
+APPROVALS_DB = "approvals.db"
+
+
 class CapabilityStore:
-    """Persistent state for the L4 gates. One file, two tables."""
+    """Persistent state for the L4 gates. One file, two tables.
+
+    A deployment that splits the planes opens two of these: the data plane's
+    private one (taint), and a second in ``control.approvals_dir`` that both
+    planes can write and that holds approvals only."""
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -198,4 +206,4 @@ class CapabilityStore:
             self._conn.close()
 
 
-__all__ = ["CapabilityStore"]
+__all__ = ["APPROVALS_DB", "CapabilityStore"]

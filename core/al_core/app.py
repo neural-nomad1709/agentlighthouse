@@ -88,12 +88,14 @@ def create_app(
     pool = EvidencePool("control" if remotes else "local",
                         runtime.ledger.db, remotes)
 
-    # HITL approvals are filed by the data plane (it runs the tool calls).
-    # When it is a separate process, this plane resolves them in the data
-    # plane's own capability store over the shared volume; the data plane
-    # reads the resolution back and executes the approved call.
+    # HITL approvals are filed by the data plane (it runs the tool calls) and
+    # resolved here; the data plane reads the resolution back and executes
+    # the approved call. With control.approvals_dir both planes already share
+    # one approvals store (the runtime opened it). Without it, this plane
+    # resolves them in the data plane's own capability store, which needs
+    # write access to dataplane_dir.
     approvals_store: CapabilityStore | None = None
-    if dp_dir is not None:
+    if dp_dir is not None and runtime.settings.control.approvals_dir is None:
         approvals_store = CapabilityStore(Path(dp_dir) / "capability_state.db")
         approvals_gate = HitlGate(timeout_s=runtime.settings.policy.hitl_timeout_s,
                                   store=approvals_store)

@@ -18,9 +18,9 @@
 # al-control is the control plane (admin API, kill switch, dashboard) on
 # control-net ONLY. Two one-shot probes gate the agent workload on every `up`:
 # `agent-selftest` (no out-of-band egress) and `agent-control-probe` (no route
-# to the control plane / kill switch). The kill switch crosses the boundary as
-# a sentinel FILE on a shared volume — never as a network path an agent could
-# reach.
+# to the control plane / kill switch). The kill switch and HITL approvals cross
+# the boundary as FILES on small shared volumes — never as a network path an
+# agent could reach. al-control mounts al-core's evidence read-only.
 #
 # The hardened runtime baseline (invariant #9) is applied to every service via
 # the `x-hardened` anchor.
@@ -56,7 +56,10 @@ volumes:
   al-data: {}          # data-plane evidence (al-core is its single writer)
   al-core-key: {}      # data-plane PRIVATE signing key; mounted by al-core only
   al-control-data: {}  # control-plane evidence (al-control is its single writer)
-  al-killswitch: {}    # the ONE crossing point: a sentinel FILE, not a network path
+  # The planes share no network. They share exactly two writable things, both
+  # small files: the kill-switch sentinel and the HITL approvals store.
+  al-killswitch: {}    # kill switch: a sentinel FILE, not a network path
+  al-approvals: {}     # HITL approvals: al-core files a request, al-control resolves it
 
 services:
   al-core:
@@ -90,10 +93,13 @@ services:
       # Watch the shared sentinel: the control plane engages the kill switch by
       # writing a file here, so no agent-reachable path can ever trigger it.
       AL_CONTROL__KILLSWITCH_DIR: /app/killswitch
+      # Held tool calls wait here for an operator's decision.
+      AL_CONTROL__APPROVALS_DIR: /app/approvals
     volumes:
       - al-data:/app/data
       - al-core-key:/app/signing
       - al-killswitch:/app/killswitch
+      - al-approvals:/app/approvals
     ports:
       - "127.0.0.1:8443:8443"   # gateway (fetch + reverse proxy), host loopback
     healthcheck:
@@ -110,7 +116,8 @@ services:
   # CONTROL PLANE — admin API + kill switch + evidence dashboard. Attached to
   # control-net ONLY: agents have no route here (proved by agent-control-probe
   # below). It owns its own ledger (control-plane evidence has its own single
-  # writer) and shares only the kill-switch sentinel volume with al-core.
+  # writer). It reads al-core's evidence read-only and writes only two things
+  # al-core also sees: the kill-switch sentinel and the approvals store.
   al-control:
     <<: *hardened
     image: *image
@@ -127,18 +134,18 @@ services:
       AL_MODE: balanced
       AL_KEYS__SIGNING_KEY_PATH: /app/data/keys/mediator_ed25519
       AL_CONTROL__KILLSWITCH_DIR: /app/killswitch
-      # Data-plane evidence for the dashboard: al-core's ledger, opened
-      # READ-ONLY by the evidence API (SQLite mode=ro). The mount itself is
-      # writable because live WAL readers must update the -shm index and HITL
-      # approvals are resolved in the data plane's capability store. Nothing
-      # on the control plane writes the chain or the mirror tables — al-core
-      # stays that chain's single writer. The volume holds no private key.
+      # Data-plane evidence for the dashboard: al-core's ledger and mirror,
+      # mounted READ-ONLY (:ro below). The control plane cannot write the
+      # chain, the mirror or the data plane's state, and the volume holds no
+      # private key. al-core stays that chain's single writer.
       AL_CONTROL__DATAPLANE_DIR: /app/dataplane
       AL_CONTROL__DATAPLANE_PUBKEY: /app/dataplane/mediator_ed25519.pub
+      AL_CONTROL__APPROVALS_DIR: /app/approvals
     volumes:
       - al-control-data:/app/data
-      - al-data:/app/dataplane
+      - al-data:/app/dataplane:ro
       - al-killswitch:/app/killswitch
+      - al-approvals:/app/approvals
     ports:
       - "127.0.0.1:8898:8888"   # operator only, host loopback — never agent-net
     depends_on: [al-core]

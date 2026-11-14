@@ -19,18 +19,20 @@ below.
   /mcp`, CONNECT proxy. Host port `127.0.0.1:8443`.
 - `al-control` — control plane: admin API, kill switch, dashboard. Host port
   `127.0.0.1:8898`. Own ledger (one writer per chain). It also mounts the data
-  plane's evidence volume at `/app/dataplane` and opens it **read-only**
+  plane's evidence volume at `/app/dataplane` **read-only**
   (`AL_CONTROL__DATAPLANE_DIR`), so the dashboard shows gateway traffic —
   without it you would see only the control plane's own receipts. Read-only is
-  enforced at the SQLite layer, so `al-core` stays the single writer of its
+  enforced by the mount itself, so `al-core` stays the single writer of its
   chain.
 - `agent-selftest` + `agent-control-probe` — one-shot probes that must exit
   0 on every `up`, proving the agent network is sealed and has no route to
   the control plane.
 - Named volumes `al-data`, `al-control-data` (evidence), `al-core-key` (the
   data plane's private signing key, mounted by `al-core` only) and
-  `al-killswitch` (the sentinel file). The control plane reads `al-data` for
-  the dashboard and approvals; it never sees the private key.
+  `al-killswitch` (the sentinel file) and `al-approvals` (held tool calls
+  waiting for an operator). The control plane mounts `al-data` read-only for
+  the dashboard and never sees the private key; the kill switch and
+  approvals volumes are the only things both planes write.
 
 ## Linux (production posture)
 

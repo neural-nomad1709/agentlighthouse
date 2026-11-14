@@ -53,7 +53,7 @@ def test_segregation_probe_gates_the_agent_workload(compose):
 
 
 def test_killswitch_crosses_the_boundary_as_a_file_not_a_route(compose):
-    """The only control->data crossing is the sentinel volume."""
+    """Control reaches the data plane through shared files, never a network."""
     core, control = compose["services"]["al-core"], compose["services"]["al-control"]
     assert "al-killswitch:/app/killswitch" in core["volumes"]
     assert "al-killswitch:/app/killswitch" in control["volumes"]
@@ -62,11 +62,11 @@ def test_killswitch_crosses_the_boundary_as_a_file_not_a_route(compose):
     # Separate ledgers: each plane's evidence chain has exactly one writer.
     assert "al-data:/app/data" in core["volumes"]
     assert "al-control-data:/app/data" in control["volumes"]
-    # The dashboard reads the data plane's evidence over a shared volume,
-    # opened read-only in code (SQLite mode=ro) — al-core stays the single
-    # writer of that chain. Without this mount the dashboard shows only the
-    # control plane's own receipts, i.e. nothing an operator cares about.
-    assert "al-data:/app/dataplane" in control["volumes"]
+    # The dashboard reads the data plane's evidence over a shared volume
+    # mounted read-only — al-core stays the single writer of that chain.
+    # Without this mount the dashboard shows only the control plane's own
+    # receipts, i.e. nothing an operator cares about.
+    assert "al-data:/app/dataplane:ro" in control["volumes"]
     assert control["environment"]["AL_CONTROL__DATAPLANE_DIR"] == "/app/dataplane"
 
 

@@ -37,6 +37,14 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
   /app/data/keys/mediator_ed25519 /app/data/keys/mediator_ed25519.pub
   /app/signing/ && rm /app/data/keys/mediator_ed25519"`
 - **Upgrade note (compose):** `al-core` no longer receives the admin token.
+- **Upgrade note (compose):** `al-control` mounts the data-plane evidence
+  volume read-only. HITL approvals moved to their own volume, `al-approvals`
+  (`/app/approvals`), which both planes write. Approvals pending at the
+  moment of the upgrade are not carried over; they lapse, which denies the
+  held call.
+- New setting `control.approvals_dir` (`AL_CONTROL__APPROVALS_DIR`): a
+  directory both planes can write, holding the approvals store. Unset, the
+  behaviour is unchanged (approvals in the data plane's data dir).
 - `admin_api_token` is optional for the gateway and the CLI. The control
   plane (`al run`, `al dashboard`) still refuses to start without it.
 - Every plane writes its public key to `<data dir>/mediator_ed25519.pub` at
@@ -89,11 +97,13 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
   file that cannot be read denies authentication. Not covered: a CONNECT
   tunnel opened before the revoke stays up, and no receipt is written for a
   revocation.
-- Compose: `al-core` is no longer attached to `control-net`, no longer holds
-  the admin token, and keeps its private signing key on a volume the control
-  plane does not mount. The control plane still mounts the data-plane
-  evidence volume read-write (SQLite readers and HITL approvals need it), so
-  it can still damage or truncate the ledger file; it cannot sign receipts.
+- Compose plane separation. `al-core` is no longer attached to `control-net`,
+  no longer holds the admin token, and keeps its private signing key on a
+  volume the control plane does not mount. `al-control` mounts the data-plane
+  evidence read-only, so it can no longer write the ledger, the mirror, the
+  published public key or the data plane's taint state. The planes share two
+  writable things: the kill-switch sentinel and the approvals store. Not
+  changed: `al-core` both faces agents and holds its signing key.
 - The image build pins `python`, `node` and `uv` by digest (`uv` was
   `:latest`).
 - Path argument constraints (`allow_prefixes` / `deny_prefixes`) now decode

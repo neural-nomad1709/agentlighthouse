@@ -27,7 +27,7 @@ from .audit import Ledger
 from .capability.gate import ActionGate
 from .capability.hitl import HitlGate
 from .capability.policy import ToolPolicy
-from .capability.store import CapabilityStore
+from .capability.store import APPROVALS_DB, CapabilityStore
 from .capability.taint import TaintTracker
 from .config import ConfigManager, Settings
 from .config.watch import ConfigWatcher
@@ -154,8 +154,15 @@ class Runtime:
         self._capability_store = CapabilityStore(self._data_dir / "capability_state.db")
         self._taint = TaintTracker(store=self._capability_store)
         self._chain = ChainDetector(gap_tolerance=settings.policy.chain_gap_tolerance)
+        # Approvals are the one piece of this state the control plane writes.
+        # With control.approvals_dir they live in a store of their own, so
+        # taint stays in a file the control plane cannot change.
+        approvals_dir = settings.control.approvals_dir
+        self._approvals_store = (
+            CapabilityStore(approvals_dir / APPROVALS_DB) if approvals_dir is not None
+            else self._capability_store)
         self._hitl = HitlGate(timeout_s=settings.policy.hitl_timeout_s,
-                              store=self._capability_store)
+                              store=self._approvals_store)
         self._pinner = ToolPinner(self._data_dir / "tool_pins.json")
         self._tool_policy = self._load_tool_policy(settings)
 
@@ -458,5 +465,7 @@ class Runtime:
 
     def close(self) -> None:
         self.stop_config_watch()
+        if self._approvals_store is not self._capability_store:
+            self._approvals_store.close()
         self._capability_store.close()
         self._ledger.close()

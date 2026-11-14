@@ -659,3 +659,26 @@ def test_d9_a_plane_publishes_its_public_key_beside_its_ledger(tmp_path):
         chain = client.get("/api/chain", headers={"Authorization": "Bearer t0ken"}).json()
     assert chain["chains"]["data"]["verified"] is True
     control.state.runtime.close()
+
+def test_d9_the_control_plane_mounts_the_evidence_volume_read_only():
+    """The last part of D9: al-control could write the data plane's ledger and
+    state. It now reads them, and approvals cross on a volume of their own."""
+    services = _compose()["services"]
+    core, control = services["al-core"], services["al-control"]
+    data_mounts = [v for v in control["volumes"] if str(v).startswith("al-data:")]
+    assert data_mounts == ["al-data:/app/dataplane:ro"]
+    for svc in (core, control):
+        assert "al-approvals:/app/approvals" in svc["volumes"]
+        assert svc["environment"]["AL_CONTROL__APPROVALS_DIR"] == "/app/approvals"
+    mounts_approvals = sorted(
+        name for name, svc in services.items()
+        if any(str(v).startswith("al-approvals:") for v in svc.get("volumes", [])))
+    assert mounts_approvals == ["al-control", "al-core"]
+
+
+def test_d9_the_image_has_a_writable_home_for_the_approvals_store():
+    from pathlib import Path
+
+    dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text("utf-8")
+    line = next(ln for ln in dockerfile.splitlines() if ln.startswith("RUN mkdir -p"))
+    assert "/app/approvals" in line.split("&&")[0] and "/app/approvals" in line.split("&&")[1]

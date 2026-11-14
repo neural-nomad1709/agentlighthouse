@@ -220,6 +220,13 @@ class ControlConfig(BaseModel):
     # Public key that verifies data-plane receipts. Default (None) =
     # <dataplane_dir>/keys/mediator_ed25519.pub.
     dataplane_pubkey: Path | None = None
+    # Where HITL approval requests are kept when the planes are separate
+    # processes: a small directory BOTH planes can write, set to the same
+    # place on each. The data plane files a request there and the control
+    # plane resolves it, so the control plane needs no write access to the
+    # data plane's own directory. None = the data plane keeps approvals in
+    # its data dir and a control plane looks for them under dataplane_dir.
+    approvals_dir: Path | None = None
 
 
 class MemoryConfig(BaseModel):

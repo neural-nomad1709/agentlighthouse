@@ -191,6 +191,7 @@ keys use `__` (double underscore).
 | `AL_GATEWAY__UPSTREAM__OPENAI_API_KEY` | Upstream OpenAI key (never in YAML) |
 | `AL_GATEWAY__UPSTREAM__ANTHROPIC_API_KEY` | Upstream Anthropic key (never in YAML) |
 | `AL_CONTROL__KILLSWITCH_DIR` | Directory holding the kill-switch sentinel file |
+| `AL_CONTROL__APPROVALS_DIR` | Directory both planes can write, holding the HITL approvals store. Set it to the same place on the gateway and the control plane when they run as separate processes |
 
 Setting an env var:
 
