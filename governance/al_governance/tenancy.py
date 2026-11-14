@@ -17,14 +17,17 @@ orgs — that is a deliberate, auditable escalation, not a default.
 from __future__ import annotations
 
 import hashlib
-import json
+import logging
 import secrets
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from al_core.identity import require_org_slug
+from al_core.jsonstore import JsonFile
 from al_core.principal import CAPABILITIES, Principal
 from al_core.receipt import utcnow_iso
+
+log = logging.getLogger("al.governance.tenancy")
 
 TOKEN_PREFIX = "alg_"  # governance user token (cf. alk_ virtual keys)
 
@@ -52,27 +55,35 @@ class Issued:
 
 
 class OrgStore:
-    """Orgs + users, persisted as JSON. Small by design: a directory, not a DB."""
+    """Orgs + users, persisted as JSON. Small by design: a directory, not a DB.
+
+    The file is re-read whenever it has changed, so a user added or revoked
+    with ``al-gov`` takes effect in a running control plane on its next
+    request."""
 
     def __init__(self, path: Path) -> None:
-        self._path = Path(path)
+        self._file = JsonFile(path)
         self._orgs: dict[str, dict] = {}
         self._users: dict[str, User] = {}
-        if self._path.exists():
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-            self._orgs = raw.get("orgs", {})
-            self._users = {k: User(**v) for k, v in raw.get("users", {}).items()}
+        self._refresh()
+
+    def _refresh(self) -> None:
+        if not self._file.changed():
+            return
+        raw = self._file.read() or {}
+        users = {k: User(**v) for k, v in raw.get("users", {}).items()}
+        self._orgs, self._users = raw.get("orgs", {}), users
 
     def _save(self) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps({
+        self._file.write({
             "orgs": dict(sorted(self._orgs.items())),
             "users": {k: asdict(u) for k, u in sorted(self._users.items())},
-        }, indent=2), encoding="utf-8")
+        })
 
     # -- orgs ------------------------------------------------------------------
 
     def create_org(self, org: str, *, display_name: str | None = None) -> dict:
+        self._refresh()
         if org in self._orgs:
             raise ValueError(f"org already exists: {org}")
         if org == "system":
@@ -84,15 +95,18 @@ class OrgStore:
         return self._orgs[org]
 
     def orgs(self) -> list[dict]:
+        self._refresh()
         return [self._orgs[k] for k in sorted(self._orgs)]
 
     def has_org(self, org: str) -> bool:
+        self._refresh()
         return org in self._orgs
 
     # -- users -----------------------------------------------------------------
 
     def add_user(self, subject: str, *, org: str | None, role: str) -> Issued:
         """Create a user and issue its token (returned once, stored hashed)."""
+        self._refresh()
         if role not in CAPABILITIES:
             raise ValueError(f"unknown role: {role} (want {', '.join(CAPABILITIES)})")
         if subject in self._users:
@@ -109,10 +123,12 @@ class OrgStore:
         return Issued(user=user, token=token)
 
     def users(self, org: str | None = None) -> list[User]:
+        self._refresh()
         out = [u for u in self._users.values() if org is None or u.org == org]
         return sorted(out, key=lambda u: (u.org or "", u.subject))
 
     def revoke(self, subject: str) -> bool:
+        self._refresh()
         if self._users.pop(subject, None) is None:
             return False
         self._save()
@@ -124,6 +140,12 @@ class OrgStore:
         """Token -> Principal. Constant-time compare against the stored hashes;
         an unknown token is indistinguishable from a wrong one."""
         if not token or not token.startswith(TOKEN_PREFIX):
+            return None
+        try:
+            self._refresh()
+        except (OSError, ValueError, KeyError, TypeError):
+            # Stale users may include revoked ones, so do not serve them.
+            log.exception("org store %s is unreadable; denying", self._file.path)
             return None
         presented = hash_token(token)
         for user in self._users.values():

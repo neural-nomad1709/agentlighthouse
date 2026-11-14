@@ -14,7 +14,7 @@ The store is swappable; a SQLite-backed store arrives when the mirror DB is wire
 from __future__ import annotations
 
 import hashlib
-import json
+import logging
 import re
 import secrets
 from dataclasses import dataclass
@@ -22,8 +22,11 @@ from pathlib import Path
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+from ..jsonstore import JsonFile
 from ..keys import public_key_hex
 from ..receipt import utcnow_iso
+
+log = logging.getLogger("al.identity")
 
 # spiffe://<org>/agent/<name> — org and name are DNS/label-ish tokens.
 _LABEL = r"[a-z0-9][a-z0-9._-]*"
@@ -114,31 +117,30 @@ class IssuedCredentials:
 
 
 class IdentityRegistry:
-    """In-memory registry with optional JSON-file persistence."""
+    """In-memory registry with optional JSON-file persistence.
+
+    The file is re-read whenever it has changed, so an identity issued or
+    revoked by another process (the CLI) takes effect in a running gateway on
+    its next request."""
 
     def __init__(self, path: Path | None = None) -> None:
-        self._path = Path(path) if path else None
+        self._file = JsonFile(path) if path else None
         self._by_id: dict[str, AgentIdentity] = {}
-        if self._path and self._path.exists():
-            self._load()
+        self._refresh()
 
-    def _load(self) -> None:
-        assert self._path is not None
-        for d in json.loads(self._path.read_text(encoding="utf-8")):
-            ident = AgentIdentity.from_json(d)
-            self._by_id[ident.spiffe_id] = ident
+    def _refresh(self) -> None:
+        if self._file is None or not self._file.changed():
+            return
+        idents = [AgentIdentity.from_json(d) for d in self._file.read() or []]
+        self._by_id = {i.spiffe_id: i for i in idents}
 
     def _save(self) -> None:
-        if not self._path:
-            return
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps([i.to_json() for i in self._by_id.values()], indent=2),
-            encoding="utf-8",
-        )
+        if self._file is not None:
+            self._file.write([i.to_json() for i in self._by_id.values()])
 
     def issue(self, org: str, name: str) -> IssuedCredentials:
         """Register a new agent: mint identity + per-agent keypair + bearer token."""
+        self._refresh()
         sid = spiffe_id(org, name)
         if sid in self._by_id:
             raise DuplicateIdentity(f"identity already registered: {sid}")
@@ -156,10 +158,20 @@ class IdentityRegistry:
         self._save()
         return IssuedCredentials(identity=ident, private_key=private_key, token=token)
 
+    def revoke(self, sid: str) -> bool:
+        """Remove an identity; its token stops authenticating. False if unknown."""
+        self._refresh()
+        if self._by_id.pop(sid, None) is None:
+            return False
+        self._save()
+        return True
+
     def get(self, sid: str) -> AgentIdentity | None:
+        self._refresh()
         return self._by_id.get(sid)
 
     def list(self) -> list[AgentIdentity]:
+        self._refresh()
         return list(self._by_id.values())
 
     def authenticate(self, sid: str | None, token: str | None) -> AgentIdentity | None:
@@ -169,6 +181,12 @@ class IdentityRegistry:
         denies). Token comparison is constant-time.
         """
         if not sid or not token:
+            return None
+        try:
+            self._refresh()
+        except (OSError, ValueError, KeyError, TypeError):
+            # Stale identities may include revoked ones, so do not serve them.
+            log.exception("identity registry %s is unreadable; denying", self._file.path)
             return None
         ident = self._by_id.get(sid)
         if ident is None:

@@ -174,6 +174,17 @@ def identity_list(
         typer.echo(f"{i.spiffe_id}\t{i.created_ts}")
 
 
+@identity_app.command("revoke")
+def identity_revoke(
+    spiffe_id: str = typer.Argument(..., help="identity (spiffe://<org>/agent/<name>)"),
+    data_dir: Path = typer.Option(DEFAULT_DATA, "--data-dir", help="registry location"),
+) -> None:
+    """Revoke an agent identity (denied on its next request, no restart)."""
+    if not IdentityRegistry(data_dir / "identities.json").revoke(spiffe_id):
+        raise _err(f"no such identity: {spiffe_id}")
+    typer.secho(f"revoked {spiffe_id}", fg=typer.colors.GREEN)
+
+
 @vkey_app.command("issue")
 def vkey_issue(
     user: str = typer.Argument(..., help="user this key belongs to"),

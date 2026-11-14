@@ -429,3 +429,120 @@ def test_d8_a_virtual_key_cannot_be_issued_into_an_invalid_org(tmp_path):
         store.issue("mallory", org="%")
     assert store.list() == []
     assert store.issue("alice", org="acme")[0].actor == "spiffe://acme/user/alice"
+
+# -- live revocation (D12) -------------------------------------------------------
+#
+# In each test `running` is the store a long-lived gateway holds and `cli` is a
+# second store on the same file, as `al vkey revoke` in another process is.
+
+
+def test_d12_a_revoked_virtual_key_stops_working_in_a_running_gateway(
+        tmp_path, monkeypatch):
+    from al_core.gateway.vkeys import VirtualKeyStore
+
+    runtime, seen, token, app = _llm(tmp_path, monkeypatch, OPENAI_OK)
+    key_id = runtime.vkeys.list()[0].key_id
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {token}"}
+        assert client.post("/v1/chat/completions", headers=headers, json=ASK).status_code == 200
+        assert VirtualKeyStore(tmp_path / "data" / "virtual_keys.json").revoke(key_id)
+        r = client.post("/v1/chat/completions", headers=headers, json=ASK)
+    assert r.status_code == 401
+    assert r.headers["X-AL-Block-Reason"] == "INVALID_VIRTUAL_KEY"
+    assert len(seen) == 1
+    runtime.close()
+
+
+def test_d12_a_key_issued_after_boot_works_without_a_restart(tmp_path):
+    from al_core.gateway.vkeys import VirtualKeyStore
+
+    running = VirtualKeyStore(tmp_path / "vk.json")
+    _, token = VirtualKeyStore(tmp_path / "vk.json").issue("alice")
+    assert running.authenticate(token) is not None
+
+
+def test_d12_a_running_store_does_not_write_a_revoked_key_back(tmp_path):
+    """The gateway's copy was loaded before the revoke. Its next save must not
+    restore the key."""
+    from al_core.gateway.vkeys import VirtualKeyStore
+
+    running = VirtualKeyStore(tmp_path / "vk.json")
+    vk, token = running.issue("alice")
+    VirtualKeyStore(tmp_path / "vk.json").revoke(vk.key_id)
+    running.issue("bob")
+    assert VirtualKeyStore(tmp_path / "vk.json").authenticate(token) is None
+    assert running.authenticate(token) is None
+
+
+def test_d12_an_agent_identity_can_be_revoked_live(tmp_path):
+    from al_core.identity import IdentityRegistry
+
+    running = IdentityRegistry(tmp_path / "ids.json")
+    creds = running.issue("acme", "bot")
+    sid = creds.identity.spiffe_id
+    assert running.authenticate(sid, creds.token) is not None
+
+    cli = IdentityRegistry(tmp_path / "ids.json")
+    assert cli.revoke(sid) is True
+    assert cli.revoke(sid) is False
+    assert running.authenticate(sid, creds.token) is None
+    assert running.get(sid) is None
+
+
+def test_d12_a_revoked_identity_is_denied_by_the_running_gateway(tmp_path):
+    from al_core.identity import IdentityRegistry
+
+    runtime = _runtime(tmp_path, FETCH_CFG.format(mode="balanced"))
+    creds = runtime.registry.issue("acme", "bot")
+    headers = {"X-AL-Identity": creds.identity.spiffe_id,
+               "Authorization": f"Bearer {creds.token}"}
+    app = create_gateway_app(
+        runtime, resolve=lambda h: [PUBLIC_IP],
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, content=b"ok")))
+    with TestClient(app) as client:
+        url = {"url": "https://api.example.com/ok"}
+        assert client.get("/fetch", params=url, headers=headers).status_code == 200
+        IdentityRegistry(tmp_path / "data" / "identities.json").revoke(
+            creds.identity.spiffe_id)
+        r = client.get("/fetch", params=url, headers=headers)
+    assert r.status_code == 401
+    assert r.headers["X-AL-Block-Reason"] == "NO_IDENTITY"
+    runtime.close()
+
+
+def test_d12_al_identity_revoke(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from al_core.cli.main import app as cli_app
+    from al_core.identity import IdentityRegistry
+
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    assert runner.invoke(cli_app, ["identity", "issue", "acme", "bot"]).exit_code == 0
+    r = runner.invoke(cli_app, ["identity", "revoke", "spiffe://acme/agent/bot"])
+    assert r.exit_code == 0 and "revoked" in r.output
+    assert IdentityRegistry(tmp_path / "data" / "identities.json").list() == []
+    again = runner.invoke(cli_app, ["identity", "revoke", "spiffe://acme/agent/bot"])
+    assert again.exit_code != 0
+
+
+def test_d12_a_revoked_console_user_stops_authenticating_live(tmp_path):
+    from al_governance.tenancy import OrgStore
+
+    running = OrgStore(tmp_path / "orgs.json")
+    running.create_org("acme")
+    issued = running.add_user("alice@acme", org="acme", role="admin")
+    assert running.authenticate(issued.token) is not None
+    assert OrgStore(tmp_path / "orgs.json").revoke("alice@acme")
+    assert running.authenticate(issued.token) is None
+
+
+def test_d12_an_unreadable_store_denies_instead_of_serving_stale_keys(tmp_path, caplog):
+    from al_core.gateway.vkeys import VirtualKeyStore
+
+    running = VirtualKeyStore(tmp_path / "vk.json")
+    _, token = running.issue("alice")
+    (tmp_path / "vk.json").write_text("{ not json", encoding="utf-8")
+    with caplog.at_level("ERROR"):
+        assert running.authenticate(token) is None
+    assert "vk.json" in caplog.text

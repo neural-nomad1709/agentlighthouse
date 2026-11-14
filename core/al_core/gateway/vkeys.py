@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import hashlib
-import json
+import logging
 import secrets
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -24,7 +24,10 @@ from typing import Callable
 
 from ..audit.db import SqliteMirror
 from ..identity import require_org_slug
+from ..jsonstore import JsonFile
 from ..receipt import utcnow_iso
+
+log = logging.getLogger("al.gateway.vkeys")
 
 TOKEN_PREFIX = "alk_"
 
@@ -81,24 +84,26 @@ class VirtualKey:
 
 
 class VirtualKeyStore:
-    """JSON-file-backed store. Lookup is by token hash — fail-closed on any miss."""
+    """JSON-file-backed store. Lookup is by token hash — fail-closed on any miss.
+
+    The file is re-read whenever it has changed, so a key issued or revoked
+    by another process (the CLI) takes effect in a running gateway on its
+    next request."""
 
     def __init__(self, path: Path | None = None) -> None:
-        self._path = Path(path) if path else None
+        self._file = JsonFile(path) if path else None
         self._by_id: dict[str, VirtualKey] = {}
-        if self._path and self._path.exists():
-            for d in json.loads(self._path.read_text(encoding="utf-8")):
-                vk = VirtualKey.from_json(d)
-                self._by_id[vk.key_id] = vk
+        self._refresh()
+
+    def _refresh(self) -> None:
+        if self._file is None or not self._file.changed():
+            return
+        keys = [VirtualKey.from_json(d) for d in self._file.read() or []]
+        self._by_id = {k.key_id: k for k in keys}
 
     def _save(self) -> None:
-        if not self._path:
-            return
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps([k.to_json() for k in self._by_id.values()], indent=2),
-            encoding="utf-8",
-        )
+        if self._file is not None:
+            self._file.write([k.to_json() for k in self._by_id.values()])
 
     def issue(
         self,
@@ -111,6 +116,7 @@ class VirtualKeyStore:
         """Mint a key. Returns (record, plaintext token) — token is not recoverable."""
         if org is not None:
             require_org_slug(org)
+        self._refresh()
         token = TOKEN_PREFIX + secrets.token_urlsafe(32)
         vk = VirtualKey(
             key_id="vk_" + secrets.token_hex(8),
@@ -132,6 +138,12 @@ class VirtualKeyStore:
         """
         if not token:
             return None
+        try:
+            self._refresh()
+        except (OSError, ValueError, KeyError, TypeError):
+            # Stale keys may include revoked ones, so do not serve them.
+            log.exception("virtual key store %s is unreadable; denying", self._file.path)
+            return None
         presented = _hash_token(token)
         for vk in self._by_id.values():
             if secrets.compare_digest(vk.token_hash, presented):
@@ -139,6 +151,7 @@ class VirtualKeyStore:
         return None
 
     def revoke(self, key_id: str) -> bool:
+        self._refresh()
         vk = self._by_id.get(key_id)
         if vk is None:
             return False
@@ -147,9 +160,11 @@ class VirtualKeyStore:
         return True
 
     def get(self, key_id: str) -> VirtualKey | None:
+        self._refresh()
         return self._by_id.get(key_id)
 
     def list(self) -> list[VirtualKey]:
+        self._refresh()
         return list(self._by_id.values())
 
 
