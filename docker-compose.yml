@@ -64,7 +64,9 @@ services:
     command:
       ["gateway", "--host", "0.0.0.0", "--port", "8443",
        "--config", "configs/balanced.yaml"]
-    networks: [agent-net, egress-net, control-net]
+    # Never control-net: the planes share files (the kill-switch sentinel, the
+    # evidence volume), not a network.
+    networks: [agent-net, egress-net]
     secrets:
       # pydantic-settings secrets carry the env prefix in the file name.
       - source: admin_api_token

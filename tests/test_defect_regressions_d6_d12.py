@@ -546,3 +546,21 @@ def test_d12_an_unreadable_store_denies_instead_of_serving_stale_keys(tmp_path, 
     with caplog.at_level("ERROR"):
         assert running.authenticate(token) is None
     assert "vk.json" in caplog.text
+
+# -- plane separation in compose (D9) --------------------------------------------
+
+
+def test_d9_the_data_plane_is_not_on_the_control_network():
+    """al-core faces agents. On control-net it could reach the admin API, so a
+    compromised mediator was one hop from the kill switch and the dashboard.
+    The planes share files (kill-switch sentinel, evidence), never a network."""
+    from pathlib import Path
+
+    import yaml
+
+    compose = yaml.safe_load(
+        (Path(__file__).resolve().parents[1] / "docker-compose.yml").read_text("utf-8"))
+    assert sorted(compose["services"]["al-core"]["networks"]) == ["agent-net", "egress-net"]
+    on_control = [name for name, svc in compose["services"].items()
+                  if "control-net" in svc.get("networks", [])]
+    assert on_control == ["al-control"]
