@@ -66,8 +66,15 @@ def create_app(
     **overrides,
 ) -> FastAPI:
     runtime = Runtime(config_path, data_dir=data_dir, **overrides)
-    authenticate = authenticator or admin_token_authenticator(
-        runtime.settings.admin_api_token.get_secret_value())
+    if authenticator is None:
+        token = runtime.settings.admin_api_token
+        if token is None or not token.get_secret_value():
+            runtime.close()
+            raise ValueError(
+                "admin_api_token is required to serve the control-plane API: set "
+                "AL_ADMIN_API_TOKEN (or the al_admin_api_token Docker secret)")
+        authenticator = admin_token_authenticator(token.get_secret_value())
+    authenticate = authenticator
 
     # Evidence reads go through a pool: this plane's own ledger plus, when
     # configured (control.dataplane_dir), the data plane's ledger opened

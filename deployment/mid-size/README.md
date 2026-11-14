@@ -27,8 +27,10 @@ below.
 - `agent-selftest` + `agent-control-probe` — one-shot probes that must exit
   0 on every `up`, proving the agent network is sealed and has no route to
   the control plane.
-- Named volumes `al-data`, `al-control-data` (evidence), `al-killswitch`
-  (the sentinel file — the only thing the planes share).
+- Named volumes `al-data`, `al-control-data` (evidence), `al-core-key` (the
+  data plane's private signing key, mounted by `al-core` only) and
+  `al-killswitch` (the sentinel file). The control plane reads `al-data` for
+  the dashboard and approvals; it never sees the private key.
 
 ## Linux (production posture)
 
@@ -141,12 +143,13 @@ below.
 
 - **Backups:** `keys/` plus the two evidence volumes
   (`docker run --rm -v agentlighthouse_al-data:/d -v $PWD:/b alpine tar czf /b/al-data.tgz /d`
-  and the same for `al-control-data`).
+  and the same for `al-control-data` and `al-core-key`; without the key
+  volume a restored data plane cannot extend its chain).
 - **SIEM feed:** `docker compose exec al-core al export --verdict block`
   on a schedule, shipped to your SIEM; every event carries `record_hash` +
   `sig` and is independently verifiable.
 - **Attestation of the evidence at any time:**
-  `docker compose exec al-core al-verify /app/data/ledger.jsonl --pubkey /app/data/keys/mediator_ed25519.pub`.
+  `docker compose exec al-core al-verify /app/data/ledger.jsonl --pubkey /app/data/mediator_ed25519.pub`.
 - **Upgrades:** `git pull`, rebuild (`docker compose build`), verify the
   suite on a workstation (`uv run pytest -q` + `make release`), then
   `docker compose up -d`. The probes re-prove the topology on every up.

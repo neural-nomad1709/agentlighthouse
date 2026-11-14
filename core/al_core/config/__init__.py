@@ -257,7 +257,10 @@ class Settings(BaseSettings):
     audit: AuditConfig = AuditConfig()
     learn: LearnConfig = LearnConfig()
     skills: SkillsConfig = SkillsConfig()
-    admin_api_token: SecretStr
+    # Authenticates the control-plane API, and only that. The control plane
+    # refuses to start without it (al_core.app.create_app); the gateway never
+    # reads it, so a data-plane deployment leaves it unset.
+    admin_api_token: SecretStr | None = None
 
     @model_validator(mode="after")
     def _enforce_boundary(self) -> "Settings":

@@ -38,7 +38,7 @@ from .egress import EgressBypassError, probe_bypass, self_test_enabled
 from .egress.selftest import ConnectFn
 from .gateway.vkeys import BudgetLedger, VirtualKeyStore
 from .identity import IdentityRegistry
-from .keys import load_or_create_signing_key
+from .keys import load_or_create_signing_key, public_key_hex
 from .killswitch import KillSwitch
 from .learn.bundle import load_bundle
 from .learn.scanner import LearnedScanner
@@ -49,6 +49,9 @@ from .memory import MemoryGuard, MemoryStore
 from .skills import SkillGuard, SkillPinner
 
 log = logging.getLogger("al.runtime")
+
+#: File name, inside a plane's data dir, of the public key that verifies its ledger.
+PUBLISHED_PUBKEY = "mediator_ed25519.pub"
 
 # System/mediator actor used for receipts not attributable to a specific agent
 # (config changes, kill switch, boot). A plain string per the receipt schema.
@@ -86,6 +89,12 @@ class Runtime:
             minimum=settings.keys.min_permissions,
         )
         self._public_key = self._signing_key.public_key()
+        # Published beside the ledger it verifies. The private key can then
+        # live where readers of this data dir (the control plane, an auditor)
+        # never see it. Rewritten on every boot from the key actually in use.
+        self._data_dir.mkdir(parents=True, exist_ok=True)
+        (self._data_dir / PUBLISHED_PUBKEY).write_text(
+            public_key_hex(self._public_key) + "\n", encoding="utf-8")
 
         # 3. Ledger (verify-on-startup + resume). Refuses to run on tamper.
         #    The mirror backend is a config swap (sqlite | postgres); the JSONL

@@ -27,6 +27,22 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 - `docker-compose.build.yml`: builds the image from the checkout.
 - `al identity revoke <spiffe-id>`: revokes an agent identity.
 ### Changed
+- **Upgrade note (compose):** the data plane's private signing key moved off
+  the evidence volume to its own volume, `al-core-key` (`/app/signing`), which
+  only `al-core` mounts. This needs an image newer than 0.3.0 (the image now
+  ships `/app/signing`). On an existing `al-data` volume, copy the key
+  across before starting `al-core`, or it generates a new key and refuses to
+  start because the existing chain does not verify:
+  `docker compose run --rm --no-deps --entrypoint sh al-core -c "cp -p
+  /app/data/keys/mediator_ed25519 /app/data/keys/mediator_ed25519.pub
+  /app/signing/ && rm /app/data/keys/mediator_ed25519"`
+- **Upgrade note (compose):** `al-core` no longer receives the admin token.
+- `admin_api_token` is optional for the gateway and the CLI. The control
+  plane (`al run`, `al dashboard`) still refuses to start without it.
+- Every plane writes its public key to `<data dir>/mediator_ed25519.pub` at
+  boot. In compose the control plane verifies data-plane receipts with that
+  copy; verify `al-core`'s ledger in the container with
+  `--pubkey /app/data/mediator_ed25519.pub`.
 - **Upgrade note:** `/fetch` denies a request whose URL carries a secret or
   PII (`SECRET_BLOCKED` / `PII_BLOCKED`), in the path or the query string.
   That includes an email address in a query parameter and a presigned URL
@@ -73,7 +89,11 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
   file that cannot be read denies authentication. Not covered: a CONNECT
   tunnel opened before the revoke stays up, and no receipt is written for a
   revocation.
-- Compose: `al-core` is no longer attached to `control-net`.
+- Compose: `al-core` is no longer attached to `control-net`, no longer holds
+  the admin token, and keeps its private signing key on a volume the control
+  plane does not mount. The control plane still mounts the data-plane
+  evidence volume read-write (SQLite readers and HITL approvals need it), so
+  it can still damage or truncate the ledger file; it cannot sign receipts.
 - The image build pins `python`, `node` and `uv` by digest (`uv` was
   `:latest`).
 - Path argument constraints (`allow_prefixes` / `deny_prefixes`) now decode

@@ -564,3 +564,98 @@ def test_d9_the_data_plane_is_not_on_the_control_network():
     on_control = [name for name, svc in compose["services"].items()
                   if "control-net" in svc.get("networks", [])]
     assert on_control == ["al-control"]
+
+def _compose() -> dict:
+    from pathlib import Path
+
+    import yaml
+
+    return yaml.safe_load(
+        (Path(__file__).resolve().parents[1] / "docker-compose.yml").read_text("utf-8"))
+
+
+def test_d9_the_data_plane_does_not_receive_the_admin_token():
+    """The admin token approves held tool calls and drives the kill switch.
+    The agent-facing mediator never uses it, so it must not hold it."""
+    services = _compose()["services"]
+    holders = [name for name, svc in services.items()
+               if any(s.get("source") == "admin_api_token" for s in svc.get("secrets", []))]
+    assert holders == ["al-control"]
+
+
+def test_d9_the_control_plane_cannot_reach_the_data_plane_signing_key():
+    """Whoever holds the private key can forge data-plane receipts. It lives on
+    a volume only al-core mounts; the control plane gets the public key."""
+    services = _compose()["services"]
+    core, control = services["al-core"], services["al-control"]
+    key_path = core["environment"]["AL_KEYS__SIGNING_KEY_PATH"]
+    assert key_path == "/app/signing/mediator_ed25519"
+    assert "al-core-key:/app/signing" in core["volumes"]
+    mounts_key = [name for name, svc in services.items()
+                  if any(str(v).startswith("al-core-key:") for v in svc.get("volumes", []))]
+    assert mounts_key == ["al-core"]
+    # The key is not under the directory the planes share.
+    assert not key_path.startswith("/app/data/")
+    assert control["environment"]["AL_CONTROL__DATAPLANE_PUBKEY"] == (
+        "/app/dataplane/mediator_ed25519.pub")
+
+
+def test_d9_the_image_has_a_writable_home_for_the_signing_key():
+    """A fresh named volume takes the ownership of the image directory it is
+    mounted on. Without the directory it is root-owned and keygen fails."""
+    from pathlib import Path
+
+    dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text("utf-8")
+    line = next(ln for ln in dockerfile.splitlines() if ln.startswith("RUN mkdir -p"))
+    assert "/app/signing" in line.split("&&")[0] and "/app/signing" in line.split("&&")[1]
+
+
+def test_d9_the_gateway_boots_without_an_admin_token(tmp_path, monkeypatch):
+    monkeypatch.delenv("AL_ADMIN_API_TOKEN")
+    monkeypatch.chdir(tmp_path)  # no .env here either
+    runtime = _runtime(tmp_path)
+    assert runtime.settings.admin_api_token is None
+    assert runtime.healthz()["status"] == "healthy"
+    runtime.close()
+
+
+@pytest.mark.parametrize("token", [None, ""])
+def test_d9_the_control_plane_refuses_to_start_without_an_admin_token(
+        tmp_path, monkeypatch, token):
+    """Optional for the gateway must not mean an open admin API."""
+    from al_core.app import create_app
+
+    monkeypatch.delenv("AL_ADMIN_API_TOKEN")
+    monkeypatch.chdir(tmp_path)
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("mode: balanced\n", encoding="utf-8")
+    overrides = {} if token is None else {"admin_api_token": token}
+    with pytest.raises(ValueError, match="admin_api_token"):
+        create_app(cfg, data_dir=tmp_path / "data", **overrides)
+    # The failed boot released the ledger: a correct start still works.
+    app = create_app(cfg, data_dir=tmp_path / "data", admin_api_token="t0ken")
+    app.state.runtime.close()
+
+
+def test_d9_a_plane_publishes_its_public_key_beside_its_ledger(tmp_path):
+    """With the private key on a volume of its own, a reader of the data dir
+    (the control plane) still needs the public key to verify the chain."""
+    from al_core.app import create_app
+
+    data = Runtime(tmp_path / "missing.yaml", data_dir=tmp_path / "data",
+                   keys={"signing_key_path": str(tmp_path / "signing" / "mediator_ed25519")})
+    data.record(actor="spiffe://acme/agent/bot", action="fetch", target="t", verdict="allow")
+    data.close()
+    published = tmp_path / "data" / "mediator_ed25519.pub"
+    assert published.read_text("utf-8") == (
+        tmp_path / "signing" / "mediator_ed25519.pub").read_text("utf-8")
+    assert not (tmp_path / "data" / "keys").exists()
+
+    control = create_app(
+        tmp_path / "missing.yaml", data_dir=tmp_path / "control", admin_api_token="t0ken",
+        control={"dataplane_dir": str(tmp_path / "data"), "dataplane_pubkey": str(published)},
+        keys={"signing_key_path": str(tmp_path / "control" / "keys" / "mediator_ed25519")})
+    with TestClient(control) as client:
+        chain = client.get("/api/chain", headers={"Authorization": "Bearer t0ken"}).json()
+    assert chain["chains"]["data"]["verified"] is True
+    control.state.runtime.close()

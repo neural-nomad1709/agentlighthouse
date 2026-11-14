@@ -80,8 +80,8 @@ docker pull ghcr.io/neural-nomad1709/agentlighthouse@sha256:8592b6decc79f5ba2ef4
 ```
 
 > The image is **fail-closed**: a bare `docker run` refuses to start without an
-> admin API token (`error: refusing to start ... admin_api_token Field
-> required`). This is intended. Run the container through Docker Compose
+> admin API token (`error: refusing to start: admin_api_token is required to
+> serve the control-plane API`). This is intended. Run the container through Docker Compose
 > (§[5.3](#53-full-topology-docker-compose)), which supplies the token as a
 > secret and wires the segregated network topology.
 

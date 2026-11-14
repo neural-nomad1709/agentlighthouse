@@ -70,10 +70,12 @@ RUN useradd --system --uid 10001 --home-dir /app --no-create-home al
 
 WORKDIR /app
 COPY --from=build /app /app
-# Pre-create the data + kill-switch dirs owned by the runtime user: a fresh
-# named volume inherits this ownership (root-owned otherwise -> keygen/ledger
-# EACCES, and the control plane could not write the kill-switch sentinel).
-RUN mkdir -p /app/data /app/killswitch && chown al:al /app/data /app/killswitch
+# Pre-create the data, kill-switch and signing-key dirs owned by the runtime
+# user: a fresh named volume inherits this ownership (root-owned otherwise ->
+# keygen/ledger EACCES, and the control plane could not write the kill-switch
+# sentinel). /app/signing holds the data plane's private key on a volume the
+# control plane never mounts.
+RUN mkdir -p /app/data /app/killswitch /app/signing && chown al:al /app/data /app/killswitch /app/signing
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 

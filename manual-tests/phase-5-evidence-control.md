@@ -142,7 +142,7 @@ in charge (401, not 503, is the proof).
 ### 5.9 Each plane's evidence verifies independently
 
 ```
-docker compose exec al-core al-verify /app/data/ledger.jsonl --pubkey /app/data/keys/mediator_ed25519.pub
+docker compose exec al-core al-verify /app/data/ledger.jsonl --pubkey /app/data/mediator_ed25519.pub
 docker compose exec al-control al-verify /app/data/ledger.jsonl --pubkey /app/data/keys/mediator_ed25519.pub
 ```
 

@@ -54,6 +54,7 @@ secrets:
 
 volumes:
   al-data: {}          # data-plane evidence (al-core is its single writer)
+  al-core-key: {}      # data-plane PRIVATE signing key; mounted by al-core only
   al-control-data: {}  # control-plane evidence (al-control is its single writer)
   al-killswitch: {}    # the ONE crossing point: a sentinel FILE, not a network path
 
@@ -67,12 +68,9 @@ services:
     # Never control-net: the planes share files (the kill-switch sentinel, the
     # evidence volume), not a network.
     networks: [agent-net, egress-net]
-    secrets:
-      # pydantic-settings secrets carry the env prefix in the file name.
-      - source: admin_api_token
-        target: al_admin_api_token
-        uid: "10001"
-        mode: 0400
+    # No admin token here: it authenticates the control-plane API, and the
+    # agent-facing mediator must not hold the credential that approves held
+    # tool calls and drives the kill switch.
     environment:
       AL_ENV: dev
       AL_MODE: balanced
@@ -81,7 +79,12 @@ services:
       # mounts report 0777 and the fail-closed key policy refuses, correctly.)
       # Prod (Linux host): mount the key via secrets with uid 10001 / mode 0400
       # and point this at /run/secrets/mediator_signing_key.
-      AL_KEYS__SIGNING_KEY_PATH: /app/data/keys/mediator_ed25519
+      #
+      # The private key sits on its own volume, NOT under /app/data: al-control
+      # mounts /app/data to read evidence, and whoever can read this key can
+      # forge data-plane receipts. al-core publishes the public half as
+      # /app/data/mediator_ed25519.pub on every boot.
+      AL_KEYS__SIGNING_KEY_PATH: /app/signing/mediator_ed25519
       # Bind the CONNECT proxy on all interfaces so agent-net can reach it.
       AL_GATEWAY__FORWARD_LISTEN: "0.0.0.0:8080"
       # Watch the shared sentinel: the control plane engages the kill switch by
@@ -89,6 +92,7 @@ services:
       AL_CONTROL__KILLSWITCH_DIR: /app/killswitch
     volumes:
       - al-data:/app/data
+      - al-core-key:/app/signing
       - al-killswitch:/app/killswitch
     ports:
       - "127.0.0.1:8443:8443"   # gateway (fetch + reverse proxy), host loopback
@@ -125,10 +129,12 @@ services:
       AL_CONTROL__KILLSWITCH_DIR: /app/killswitch
       # Data-plane evidence for the dashboard: al-core's ledger, opened
       # READ-ONLY by the evidence API (SQLite mode=ro). The mount itself is
-      # writable only because live WAL readers must update the -shm index;
-      # nothing on the control plane writes the chain or the mirror tables —
-      # al-core stays that chain's single writer.
+      # writable because live WAL readers must update the -shm index and HITL
+      # approvals are resolved in the data plane's capability store. Nothing
+      # on the control plane writes the chain or the mirror tables — al-core
+      # stays that chain's single writer. The volume holds no private key.
       AL_CONTROL__DATAPLANE_DIR: /app/dataplane
+      AL_CONTROL__DATAPLANE_PUBKEY: /app/dataplane/mediator_ed25519.pub
     volumes:
       - al-control-data:/app/data
       - al-data:/app/dataplane

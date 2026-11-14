@@ -11,7 +11,7 @@ independently verifiable evidence** of every decision it takes.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)
-![Tests](https://img.shields.io/badge/tests-863-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-870-brightgreen.svg)
 ![Evidence](https://img.shields.io/badge/evidence-Ed25519%20%2B%20RFC%208785-informational.svg)
 ![Status](https://img.shields.io/badge/status-pilot%2Fdesign--partner-orange.svg)
 [![Image](https://img.shields.io/badge/image-ghcr.io%2Fneural--nomad1709%2Fagentlighthouse-2496ED.svg?logo=docker&logoColor=white)](https://github.com/neural-nomad1709/agentlighthouse/pkgs/container/agentlighthouse)
@@ -888,7 +888,7 @@ gap that is worse than described very much is.
 
 ## Testing
 
-- **875 automated tests** (`uv run pytest -q`): 863 pass in a standard
+- **882 automated tests** (`uv run pytest -q`): 870 pass in a standard
   environment, with 12 skipped (Postgres-backed mirror tests unless a live-server
   DSN is provided, plus Linux-only nftables/netns and POSIX-mode tests). A 9-test
   Playwright dashboard end-to-end suite lives in `frontend/`.
