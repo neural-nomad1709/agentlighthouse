@@ -25,7 +25,18 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 - The container image is published for `linux/arm64` as well as `linux/amd64`.
 - CI runs the test suite and the three demos on Windows as well as Linux.
 - `docker-compose.build.yml`: builds the image from the checkout.
+- `al identity revoke <spiffe-id>`: revokes an agent identity.
 ### Changed
+- **Upgrade note:** `/fetch` denies a request whose URL carries a secret or
+  PII (`SECRET_BLOCKED` / `PII_BLOCKED`), in the path or the query string.
+  That includes an email address in a query parameter and a presigned URL
+  the agent passes in directly (the AWS key id in `X-Amz-Credential`).
+  Redirects to a presigned URL are still followed.
+- **Upgrade note:** `/fetch` receipts record the URL with query parameter
+  names only: values, the fragment and any userinfo are dropped.
+- **Upgrade note:** `al-gov org create` and `al vkey issue --org` refuse an org
+  slug that is not a SPIFFE org token (lowercase letters, digits, `.`, `_`,
+  `-`). Existing orgs are not changed.
 - **Upgrade note:** `docker-compose.yml` no longer builds the image. It pulls
   the released, cosign-signed `ghcr.io/neural-nomad1709/agentlighthouse`. To
   run a checkout, add `-f docker-compose.build.yml`. The pilot installers pull.
@@ -42,6 +53,27 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
   longer period signed wrong numbers. They now count every receipt in the
   period (new paged `iter_receipts` on both audit backends).
 ### Security
+- LLM proxy: a non-streaming reply with a `strip` verdict was receipted as
+  redacted and returned unredacted. It is now returned redacted.
+- LLM proxy: DLP read only text blocks. It now scans tool calls and their
+  arguments, tool results and tool definitions, in requests and replies,
+  including streamed tool-call arguments. A `strip` verdict on a stream is
+  still not redacted; only a block severs it.
+- `/fetch`: the URL an agent asks for was never scanned, so a permitted host
+  could receive a secret in the path or query string, and the raw URL was
+  written into the signed receipt. See the upgrade notes above. In audit
+  mode, and for a secret no scanner recognises, the URL path is still
+  receipted as-is.
+- Tenant scoping compared actors with `LIKE 'spiffe://<org>/%'`. An org scope
+  of `%` or `acm_` read other tenants' evidence. Both mirrors now compare
+  the exact prefix.
+- Revocation is live. A revoked virtual key, agent identity or console user
+  is denied on the next request, with no restart: the stores re-read their
+  file when it changes. Before, a running gateway kept honouring it. A store
+  file that cannot be read denies authentication. Not covered: a CONNECT
+  tunnel opened before the revoke stays up, and no receipt is written for a
+  revocation.
+- Compose: `al-core` is no longer attached to `control-net`.
 - The image build pins `python`, `node` and `uv` by digest (`uv` was
   `:latest`).
 - Path argument constraints (`allow_prefixes` / `deny_prefixes`) now decode
