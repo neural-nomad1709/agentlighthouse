@@ -1,7 +1,7 @@
 # al-core — AgentLighthouse data + control plane (MIT).
 [project]
 name = "agentlighthouse-core"
-version = "0.3.0"
+version = "0.4.0"
 description = "AgentLighthouse core: proxies, scanners, policy engine, receipts, CLI"
 authors = [{ name = "Amit Kala" }]
 requires-python = ">=3.12"

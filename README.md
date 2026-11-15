@@ -21,7 +21,7 @@ independently verifiable evidence** of every decision it takes.
 > Where a capability is not provided, it is named plainly in
 > [What This Does Not Do](#what-this-does-not-do).
 
-**Source:** <https://github.com/neural-nomad1709/agentlighthouse> &nbsp;·&nbsp; **Image:** `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0`
+**Source:** <https://github.com/neural-nomad1709/agentlighthouse> &nbsp;·&nbsp; **Image:** `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.4.0`
 
 ---
 
@@ -497,10 +497,10 @@ an SBOM attestation. Pull it by tag, or pin the digest for an immutable,
 tamper-evident reference:
 
 ```bash
-docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0
+docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.4.0
 
 # immutable digest pin:
-docker buildx imagetools inspect ghcr.io/neural-nomad1709/agentlighthouse:0.3.0   # prints the digest
+docker buildx imagetools inspect ghcr.io/neural-nomad1709/agentlighthouse:0.4.0   # prints the digest
 docker pull ghcr.io/neural-nomad1709/agentlighthouse@sha256:<digest>
 ```
 

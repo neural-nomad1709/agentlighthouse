@@ -10,7 +10,7 @@ variant is shown. Where a command is platform-specific or has a prerequisite,
 it is called out inline.
 
 - **Source:** <https://github.com/neural-nomad1709/agentlighthouse>
-- **Image:** `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0`
+- **Image:** `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.4.0`
 - **License:** MIT
 
 ---
@@ -69,10 +69,10 @@ non-root. Pull by tag, or pin the digest for an immutable, tamper-evident
 reference:
 
 ```bash
-docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0
+docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.4.0
 
 # immutable digest pin:
-docker buildx imagetools inspect ghcr.io/neural-nomad1709/agentlighthouse:0.3.0   # prints the digest
+docker buildx imagetools inspect ghcr.io/neural-nomad1709/agentlighthouse:0.4.0   # prints the digest
 docker pull ghcr.io/neural-nomad1709/agentlighthouse@sha256:<digest>
 ```
 
@@ -426,5 +426,5 @@ uv run python examples/a2a-lab/demo.py                    # A2A card poisoning +
 | `uv run al-gov attest export <slug>` | Export a signed posture attestation |
 | `uv run al-gov attest verify <file>` | Verify an attestation |
 | `uv run al-gov cost --org <slug>` | Per-key spend for an org |
-| `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0` | Download the published image |
+| `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.4.0` | Download the published image |
 | `docker compose up -d` / `down -v` | Bring the sealed topology up / down |

@@ -12,7 +12,7 @@ members = [
 
 [[package]]
 name = "agentlighthouse"
-version = "0.3.0"
+version = "0.4.0"
 source = { virtual = "." }
 dependencies = [
     { name = "agentlighthouse-core" },
@@ -47,7 +47,7 @@ dev = [
 
 [[package]]
 name = "agentlighthouse-core"
-version = "0.3.0"
+version = "0.4.0"
 source = { editable = "core" }
 dependencies = [
     { name = "agentlighthouse-verify" },
@@ -91,7 +91,7 @@ provides-extras = ["scanners", "postgres"]
 
 [[package]]
 name = "agentlighthouse-governance"
-version = "0.3.0"
+version = "0.4.0"
 source = { editable = "governance" }
 dependencies = [
     { name = "agentlighthouse-core" },
@@ -121,7 +121,7 @@ provides-extras = ["postgres"]
 
 [[package]]
 name = "agentlighthouse-verify"
-version = "0.3.0"
+version = "0.4.0"
 source = { editable = "verify" }
 dependencies = [
     { name = "cryptography" },

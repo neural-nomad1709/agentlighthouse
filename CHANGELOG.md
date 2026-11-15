@@ -12,6 +12,13 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 ## [Unreleased]
 
 ### Added
+### Changed
+### Fixed
+### Security
+
+## [0.4.0] - 2026-11-15
+
+### Added
 - **Advisory mode.** When the egress bypass self-test is off (the default
   outside `env: prod`), startup logs `advisory mode` and the signed boot
   receipt carries the finding `egress.advisory_mode`: the mediator has not

@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help install sync test cov lint fmt keygen init check healthz run verify demo demo-memory demo-a2a release bump-version compose-config sbom sign pilot clean
 
-IMAGE ?= ghcr.io/neural-nomad1709/agentlighthouse:0.3.0
+IMAGE ?= ghcr.io/neural-nomad1709/agentlighthouse:0.4.0
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \

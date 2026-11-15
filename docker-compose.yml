@@ -29,7 +29,7 @@
 # .github/workflows/publish-image.yml. Compose PULLS it, so what runs is the
 # signed artifact. scripts/bump-version.sh keeps the tag in step.
 # To build from this checkout instead, add -f docker-compose.build.yml.
-x-image: &image ghcr.io/neural-nomad1709/agentlighthouse:0.3.0
+x-image: &image ghcr.io/neural-nomad1709/agentlighthouse:0.4.0
 
 x-hardened: &hardened
   security_opt: ["no-new-privileges:true"]
