@@ -8,6 +8,7 @@ working directory.
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tomllib
@@ -97,6 +98,49 @@ def test_each_package_is_published_from_its_own_environment():
     assert published == {
         (project.replace("-", "_"), environment)
         for project, (_, environment) in PYPI_PROJECTS.items()}
+
+
+def _package_dir(project: str) -> Path:
+    return ROOT / PYPI_PROJECTS[project][0]
+
+
+@pytest.mark.parametrize("project", PYPI_PROJECTS)
+def test_each_package_ships_the_repository_license(project):
+    meta = tomllib.loads((_package_dir(project) / "pyproject.toml").read_text(encoding="utf-8"))
+    assert meta["project"]["license-files"] == ["LICENSE"]
+    # A package builds from its own directory, so it carries its own copy.
+    assert (_package_dir(project) / "LICENSE").read_bytes() == (ROOT / "LICENSE.txt").read_bytes()
+
+
+@pytest.mark.parametrize("project", PYPI_PROJECTS)
+def test_each_package_has_a_pypi_page(project):
+    meta = tomllib.loads((_package_dir(project) / "pyproject.toml").read_text(encoding="utf-8"))
+    assert meta["project"]["readme"] == "README.md"
+    page = (_package_dir(project) / "README.md").read_text(encoding="utf-8")
+    assert f"pip install {project}" in page
+    # PyPI renders the page away from the repository: a relative link or
+    # image is dead there.
+    targets = re.findall(r"\]\(([^)\s]+)", page) + re.findall(r'(?:src|href)="([^"]+)"', page)
+    assert targets
+    assert not [t for t in targets if not t.startswith(("https://", "#"))]
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="needs uv to build the wheel")
+@pytest.mark.parametrize("project", PYPI_PROJECTS)
+def test_each_built_wheel_carries_the_license_and_the_page(project, tmp_path):
+    out = tmp_path / "dist"
+    built = subprocess.run(
+        ["uv", "build", "--wheel", "--package", project, "-o", str(out)],
+        cwd=ROOT, capture_output=True, text=True)
+    assert built.returncode == 0, built.stderr
+    (wheel,) = out.glob("*.whl")
+    with zipfile.ZipFile(wheel) as z:
+        (license_file,) = [n for n in z.namelist() if n.endswith(".dist-info/licenses/LICENSE")]
+        assert z.read(license_file) == (ROOT / "LICENSE.txt").read_bytes()
+        (metadata,) = [n for n in z.namelist() if n.endswith(".dist-info/METADATA")]
+        described = z.read(metadata).decode("utf-8")
+    assert "Description-Content-Type: text/markdown" in described
+    assert f"pip install {project}" in described
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="needs uv to build the wheel")

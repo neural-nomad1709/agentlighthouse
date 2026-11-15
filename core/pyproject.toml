@@ -6,6 +6,8 @@ description = "AgentLighthouse core: proxies, scanners, policy engine, receipts,
 authors = [{ name = "Amit Kala" }]
 requires-python = ">=3.12"
 license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
 dependencies = [
     "agentlighthouse-verify",
     "cryptography>=43",

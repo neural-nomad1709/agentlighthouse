@@ -7,6 +7,8 @@ description = "AgentLighthouse governance: org tenancy, RBAC, budgets, signed po
 authors = [{ name = "Amit Kala" }]
 requires-python = ">=3.12"
 license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
 dependencies = [
     "agentlighthouse-core",
     "agentlighthouse-verify",

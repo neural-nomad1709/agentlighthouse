@@ -23,6 +23,8 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 - `publish-pypi.yml`: builds, smoke-tests and publishes the three packages to
   PyPI on a release (trusted publishing), as `agentlighthouse-core`,
   `agentlighthouse-verify` and `agentlighthouse-governance`.
+- Each Python package ships the MIT license text and its own README, which is
+  its page on PyPI.
 - The container image is published for `linux/arm64` as well as `linux/amd64`.
 - CI runs the test suite and the three demos on Windows as well as Linux.
 - `docker-compose.build.yml`: builds the image from the checkout.
