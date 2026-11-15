@@ -72,7 +72,8 @@ reference:
 docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0
 
 # immutable digest pin:
-docker pull ghcr.io/neural-nomad1709/agentlighthouse@sha256:8592b6decc79f5ba2ef4f5978fb82c58dd14482146864375d62161fb41495fdc
+docker buildx imagetools inspect ghcr.io/neural-nomad1709/agentlighthouse:0.3.0   # prints the digest
+docker pull ghcr.io/neural-nomad1709/agentlighthouse@sha256:<digest>
 ```
 
 > The image is **fail-closed**: a bare `docker run` refuses to start without an

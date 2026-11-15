@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from dev_errors import DevErrorRecorder, make_run_id
+from dev_errors import ENABLE_VAR, DevErrorRecorder, make_run_id, session_recorder
 
 
 def _row_count(db_path) -> int:
@@ -63,3 +63,15 @@ def test_recording_never_raises_on_bad_path(tmp_path):
                exc_type="E", message="m", longrepr=None, duration=None)
     rec.close()  # must not raise
     assert rec.recorded == 0
+
+
+def test_recording_is_off_unless_asked_for():
+    assert session_recorder({}) is None
+    assert session_recorder({ENABLE_VAR: "0"}) is None
+    assert session_recorder({ENABLE_VAR: ""}) is None
+
+
+def test_recording_is_on_when_asked_for():
+    rec = session_recorder({ENABLE_VAR: "1"})
+    assert isinstance(rec, DevErrorRecorder) and rec.run_id
+    rec.close()

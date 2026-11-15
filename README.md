@@ -11,7 +11,7 @@ independently verifiable evidence** of every decision it takes.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)
-![Tests](https://img.shields.io/badge/tests-885-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-888-brightgreen.svg)
 ![Evidence](https://img.shields.io/badge/evidence-Ed25519%20%2B%20RFC%208785-informational.svg)
 ![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 [![Image](https://img.shields.io/badge/image-ghcr.io%2Fneural--nomad1709%2Fagentlighthouse-2496ED.svg?logo=docker&logoColor=white)](https://github.com/neural-nomad1709/agentlighthouse/pkgs/container/agentlighthouse)
@@ -500,7 +500,8 @@ tamper-evident reference:
 docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0
 
 # immutable digest pin:
-docker pull ghcr.io/neural-nomad1709/agentlighthouse@sha256:8592b6decc79f5ba2ef4f5978fb82c58dd14482146864375d62161fb41495fdc
+docker buildx imagetools inspect ghcr.io/neural-nomad1709/agentlighthouse:0.3.0   # prints the digest
+docker pull ghcr.io/neural-nomad1709/agentlighthouse@sha256:<digest>
 ```
 
 The repository's `docker-compose.yml` pulls this same signed image (add
@@ -882,7 +883,7 @@ gap that is worse than described very much is.
 
 ## Testing
 
-- **897 automated tests** (`uv run pytest -q`): 885 pass in a standard
+- **900 automated tests** (`uv run pytest -q`): 888 pass in a standard
   environment, with 12 skipped (Postgres-backed mirror tests unless a live-server
   DSN is provided, plus Linux-only nftables/netns and POSIX-mode tests). A 9-test
   Playwright dashboard end-to-end suite lives in `frontend/`.

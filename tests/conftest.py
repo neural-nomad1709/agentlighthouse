@@ -5,11 +5,12 @@ import pytest
 from al_core.keys import generate_signing_key
 from al_core.receipt import ReceiptSigner
 
-from dev_errors import DevErrorRecorder, make_run_id  # tests/ is on sys.path
+from dev_errors import DevErrorRecorder, session_recorder  # tests/ is on sys.path
 
 # -- development_errors recorder ------------------------------------------------
-# Every failing/erroring test phase is appended to the `development_errors`
-# table in data/development.sqlite (a separate db from the evidence mirror).
+# Off unless AL_RECORD_TEST_FAILURES=1. When on, every failing/erroring test
+# phase is appended to the `development_errors` table in
+# data/development.sqlite (a separate db from the evidence mirror).
 # Recording is best-effort and never affects test outcomes.
 
 _recorder: DevErrorRecorder | None = None
@@ -17,7 +18,7 @@ _recorder: DevErrorRecorder | None = None
 
 def pytest_configure(config):  # noqa: ARG001
     global _recorder
-    _recorder = DevErrorRecorder(make_run_id())
+    _recorder = session_recorder()
 
 
 def pytest_runtest_logreport(report):

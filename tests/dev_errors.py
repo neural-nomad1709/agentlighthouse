@@ -5,8 +5,8 @@ mirror (``al.sqlite``) — test diagnostics must not mingle with security
 receipts. One row per failing/erroring test phase, per run. Purely a dev-time
 observability aid; the file is gitignored (under ``data/``).
 
-Wired from ``conftest.py`` via ``pytest_runtest_logreport`` + a session-end
-summary. Recording never raises into the test run — a broken recorder must not
+Off by default: set ``AL_RECORD_TEST_FAILURES=1`` to record a run. Wired from
+``conftest.py`` via ``pytest_runtest_logreport`` + a session-end summary. Recording never raises into the test run — a broken recorder must not
 turn a green suite red.
 """
 
@@ -16,6 +16,7 @@ import datetime as _dt
 import os
 import sqlite3
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parents[1] / "data" / "development.sqlite"
@@ -124,4 +125,14 @@ def make_run_id() -> str:
     return f"{stamp}-{os.getpid()}"
 
 
-__all__ = ["DB_PATH", "DevErrorRecorder", "make_run_id"]
+ENABLE_VAR = "AL_RECORD_TEST_FAILURES"
+
+
+def session_recorder(environ: Mapping[str, str] = os.environ) -> DevErrorRecorder | None:
+    """The recorder for this pytest run, or None unless the run asked for one."""
+    if environ.get(ENABLE_VAR) != "1":
+        return None
+    return DevErrorRecorder(make_run_id())
+
+
+__all__ = ["DB_PATH", "ENABLE_VAR", "DevErrorRecorder", "make_run_id", "session_recorder"]

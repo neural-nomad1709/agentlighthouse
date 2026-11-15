@@ -221,6 +221,19 @@ def test_version_bump_also_moves_the_compose_image_tag():
     assert "x-image: &image" in text and "docker-compose.yml" in text
 
 
+def test_the_docs_name_the_released_image_tag():
+    """A pull command in the docs is the current release, moved by the bump
+    script. No digest is written down: it exists only after the image is
+    published, so a recorded one is always the previous release's."""
+    bump = (ROOT / "scripts" / "bump-version.sh").read_text(encoding="utf-8")
+    for name in ("README.md", "implementation.md"):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        tags = set(re.findall(r"agentlighthouse:(\d+\.\d+\.\d+)", text))
+        assert tags == {_project_version()}, name
+        assert not re.search(r"agentlighthouse@sha256:[0-9a-f]{64}", text), name
+        assert name in bump
+
+
 def test_published_image_is_multi_arch():
     workflow = (ROOT / ".github" / "workflows" / "publish-image.yml").read_text(
         encoding="utf-8")

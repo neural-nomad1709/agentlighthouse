@@ -60,6 +60,9 @@ sed -i "s|^\(IMAGE ?= .*:\).*$|\1${VERSION}|" Makefile
 echo "  Makefile (IMAGE)"
 sed -i "s|^\(x-image: &image .*:\).*$|\1${VERSION}|" docker-compose.yml
 echo "  docker-compose.yml (x-image)"
+# The pull commands in the docs name the released tag.
+sed -i -E "s|(agentlighthouse:)[0-9]+\.[0-9]+\.[0-9]+|\1${VERSION}|g" README.md implementation.md
+echo "  README.md, implementation.md (image tag)"
 # uv.lock records the workspace members' versions; keep it in step.
 uv lock --quiet
 echo "  uv.lock"
@@ -85,7 +88,8 @@ p.write_text(text, encoding="utf-8", newline="\n")
 PY
 
 echo "[3/4] commit"
-git add "${PYPROJECTS[@]}" Makefile docker-compose.yml uv.lock CHANGELOG.md
+git add "${PYPROJECTS[@]}" Makefile docker-compose.yml uv.lock CHANGELOG.md \
+  README.md implementation.md
 git commit -m "Release v${VERSION}"
 
 echo "[4/4] tag v${VERSION}"
