@@ -85,7 +85,7 @@ jobs:
           - dist: agentlighthouse_verify
             environment: pypi-verify
           - dist: agentlighthouse_governance
-            environment: agentlighthouse-governance
+            environment: pypi-governance
     environment: ${{ matrix.environment }}
     permissions:
       id-token: write # PyPI trusted publishing

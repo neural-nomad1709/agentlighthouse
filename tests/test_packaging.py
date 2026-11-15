@@ -77,7 +77,7 @@ def test_init_never_overwrites_an_operators_config(tmp_path, monkeypatch):
 PYPI_PROJECTS = {
     "agentlighthouse-core": ("core", "pypi"),
     "agentlighthouse-verify": ("verify", "pypi-verify"),
-    "agentlighthouse-governance": ("governance", "agentlighthouse-governance"),
+    "agentlighthouse-governance": ("governance", "pypi-governance"),
 }  # the environment names are the ones registered on pypi.org
 
 
