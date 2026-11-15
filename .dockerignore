@@ -19,3 +19,9 @@ keys/*_ed25519
 keys/*.pub
 .git/
 .env
+# Internal working docs and assistant state: never part of a build context.
+.internal/
+product_strategy/
+paper/
+.claude/
+CLAUDE.md

@@ -6,10 +6,23 @@
 # Product strategy working docs (never published).
 /product_strategy/
 
+# Progress and planning notes belong in .internal/. These names sat at the
+# repo root before the public reorganisation; keep a stray copy from being
+# committed again.
+/STATUS.md
+/ToDo.md
+/TODO.md
+/MEMORY.md
+/GAPS.md
+/Plan_V2.md
+/[0-9][0-9]_*.md
+
 # --- Paper ---
 /paper/*
 # --- general files ---
 CLAUDE.md
+# AI assistant session state, local settings and memory.
+.claude/
 
 # --- Secrets & keys (NEVER commit — invariant D5) ---
 keys/
