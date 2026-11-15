@@ -42,8 +42,7 @@ Hardening and packaging are in place: the gVisor runtime profile
 (`make sbom` / `make sign`), and the probe-gated one-command pilot install
 (`make pilot`).
 
-Treat every deployment as a design-partner/pilot posture regardless: the
-enforcement gates are real and tested, but they have not yet met a real
-partner workload, so false-positive tuning and zero-breakage proof are still
-open. The README's "What this does NOT do" section is the honest list of what
-is and is not covered.
+Start every deployment in audit mode against your own workload: the
+enforcement gates are tested, but the false-positive rate depends on the
+workload and no figure is published for it. The README's "What This Does Not
+Do" section is the list of what is and is not covered.

@@ -1,4 +1,4 @@
-# Phase 8 manual tests — Hardening, compliance, packaging
+# Manual tests 8: Hardening, compliance, packaging
 
 What you verify: the hardening invariants hold as tests, the gVisor overlay
 is valid, the one-command pilot install works end to end and refuses an
@@ -13,7 +13,7 @@ clearly when its tools are absent), and the rollout configs validate.
 
 ## Test data preparation
 
-None — Phase 8 is configuration, packaging, and documentation; its inputs
+None — Guide 8 is configuration, packaging, and documentation; its inputs
 are the repository files themselves.
 
 ## Tests
@@ -99,13 +99,13 @@ Expected: all three exit 0. Cross-check `docs/rollout.md`: strict's config
 shows the tighter posture it documents (`allow_ports: [443]`, 1 redirect,
 1 MiB fetch cap, halved budgets).
 
-### 8.8 Compliance docs are present and honest
+### 8.8 Compliance docs are present and consistent
 
 Open `docs/compliance/README.md` and follow its table: NIST 800-53, EU AI
 Act, SOC 2, and MCP-threats mappings each tie every claim to a mechanism
 plus its receipt evidence, and each carries the "planning aid, not a legal
-opinion" disclaimer. The MCP doc's "Honest gaps" section must match the
-README's "What this does NOT do" section.
+opinion" disclaimer. The MCP doc's "Limitations" section must match the
+README's "What This Does Not Do" section.
 
 ## Cleanup
 

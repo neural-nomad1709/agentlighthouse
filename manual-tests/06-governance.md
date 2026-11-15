@@ -1,8 +1,8 @@
-# Phase 6 manual tests — Multi-org governance
+# Manual tests 6: Multi-org governance
 
 What you verify: tenant creation, RBAC roles, org-scoped evidence isolation
 (enforced in the core), signed posture attestation with a computed
-evidence level, honest cost reporting, and (optional) the Postgres
+evidence level, cost reporting, and (optional) the Postgres
 concurrent-writer path.
 
 ## Environment setup
@@ -149,4 +149,4 @@ exactly 100 admitted.
 ## Cleanup
 
 Stop any running server. Reset `data/` if you want a clean slate for
-Phase 7 (Phase 7 seeds its own blocks).
+Guide 7 (Guide 7 seeds its own blocks).

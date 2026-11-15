@@ -2,7 +2,7 @@
 
 > **License:** MIT. This document and `receipt-v1.schema.json` are the
 > portable, vendor-neutral evidence format at the center of AgentLighthouse.
-> They are published *first* (D8) so third parties can produce and verify
+> They are published so third parties can produce and verify
 > receipts without the AgentLighthouse runtime. Aligns with the Agent Evidence
 > Levels (AEL) direction.
 

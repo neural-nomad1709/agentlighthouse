@@ -11,14 +11,14 @@ independently verifiable evidence** of every decision it takes.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)
-![Tests](https://img.shields.io/badge/tests-876-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-885-brightgreen.svg)
 ![Evidence](https://img.shields.io/badge/evidence-Ed25519%20%2B%20RFC%208785-informational.svg)
-![Status](https://img.shields.io/badge/status-pilot%2Fdesign--partner-orange.svg)
+![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 [![Image](https://img.shields.io/badge/image-ghcr.io%2Fneural--nomad1709%2Fagentlighthouse-2496ED.svg?logo=docker&logoColor=white)](https://github.com/neural-nomad1709/agentlighthouse/pkgs/container/agentlighthouse)
 
 > Runs on a laptop for evaluation; ships as a hardened, signed container for
 > production. Every claim in this document maps to a shipped, tested mechanism.
-> Where a capability is not yet delivered, it is named plainly in
+> Where a capability is not provided, it is named plainly in
 > [What This Does Not Do](#what-this-does-not-do).
 
 **Source:** <https://github.com/neural-nomad1709/agentlighthouse> &nbsp;·&nbsp; **Image:** `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0`
@@ -54,7 +54,6 @@ independently verifiable evidence** of every decision it takes.
 - [CI/CD and Supply-Chain Integrity](#cicd-and-supply-chain-integrity)
 - [Enterprise Adoption Guide](#enterprise-adoption-guide)
 - [Build vs Buy](#build-vs-buy)
-- [Roadmap](#roadmap)
 - [What This Does Not Do](#what-this-does-not-do)
 - [Contributing and Security Reporting](#contributing-and-security-reporting)
 - [Testing](#testing)
@@ -90,7 +89,7 @@ container image.
 | Enforcement posture | Fail-closed, default-deny, identity-bound least privilege |
 | Deployment | Self-hosted; laptop for evaluation, hardened container for production |
 | License | MIT in its entirety |
-| Maturity | Enforcement gates shipped and tested; pilot / design-partner stage |
+| Maturity | Pre-1.0; enforcement gates shipped and tested |
 | Language / runtime | Python 3.12+ |
 
 ## Why This Project Exists
@@ -509,6 +508,17 @@ The repository's `docker-compose.yml` pulls this same signed image (add
 the full segregated topology (agent-net / egress-net / control-net, the kill
 switch, and the two boot probes) — see [Deployment Models](#deployment-models).
 
+### Install from PyPI
+
+```bash
+pip install agentlighthouse-core          # the mediator: `al`, plus `al-verify`
+pip install agentlighthouse-verify        # the standalone verifier only
+pip install agentlighthouse-governance    # multi-org governance: `al-gov`
+```
+
+The core wheel carries the shipped configs, the default-deny policy and the
+prebuilt dashboard, so `al init` works in an empty directory.
+
 ### Install and verify (native)
 
 ```bash
@@ -751,10 +761,10 @@ receipt.
   ledger is append-only and tamper-evident.
 - **Scalability posture.** SQLite (WAL) suits single-writer plane deployments;
   the optional Postgres mirror is the concurrent-writer path for larger fleets.
-- **Honest maturity.** The enforcement gates are real and tested, but they have
-  not yet met a production partner workload; false-positive tuning and
-  zero-breakage proof require a real pilot. Treat any deployment as a pilot
-  posture and read [What This Does Not Do](#what-this-does-not-do).
+- **Measure before you enforce.** The enforcement gates are tested, but no
+  false-positive rate is published: it depends on the workload. Run in audit
+  mode against your own workload first, and read
+  [What This Does Not Do](#what-this-does-not-do).
 
 ## CI/CD and Supply-Chain Integrity
 
@@ -782,8 +792,8 @@ flowchart LR
   are pinned by digest in the `Dockerfile`.
 - **`publish-pypi.yml`** runs on a published release: builds the three
   packages, smoke-tests the wheels in a clean environment, and publishes them
-  with PyPI trusted publishing. It has not run yet, so the packages are not on
-  PyPI today.
+  with PyPI trusted publishing as `agentlighthouse-core`,
+  `agentlighthouse-verify` and `agentlighthouse-governance`.
 
 Verify a release:
 
@@ -829,32 +839,16 @@ self-hosted plane with published specifications and no evidence lock-in, so the
 build-vs-buy decision is not "adopt a black box" but "adopt a verifiable,
 inspectable control plane you can extend."
 
-## Roadmap
-
-Directional and candidate work, drawn from publicly documented gaps. Nothing here
-is a dated commitment.
-
-- **Named ML detection engines** (LLM Guard, Presidio) as optional adapters
-  behind the existing `Scanner` interface, keeping the default install
-  dependency-free.
-- **A2A wire transport** (HTTP/gRPC) with **sender authentication** and replay
-  protection, graduating the shipped mediator and harness to production
-  inter-agent traffic.
-- **TLS interception** inside CONNECT tunnels (currently deferred; the forward
-  proxy enforces on destination host, port, and pinned IP only).
-- **Bare-metal Linux validation** of L0 nftables enforcement.
-- **A production pilot** to establish false-positive rate and zero-workflow
-  breakage.
-
 ## What This Does Not Do
 
-Read this before you trust it in production. This is the master honesty
-statement; the compliance mappings defer to it.
+Read this before you trust it in production. The compliance mappings defer to
+this section.
 
-- The named ML engines (LLM Guard, Presidio) are **not shipped**. The baseline
-  scanners are dependency-free regex and heuristics behind the same `Scanner`
-  interface. Of LLM Guard's 24 scanners this covers four fully and four
-  partially, and none of the ML-judgement ones. A **detect-secrets adapter**
+- **Detection is pattern matching, with no machine-learning judgement.** The
+  scanners are dependency-free regex and heuristics behind one `Scanner`
+  interface; no ML engine (such as LLM Guard or Presidio) is included. Measured
+  against LLM Guard's 24 scanners, they cover four fully and four partially,
+  and none of the ML-judgement ones. A **detect-secrets adapter**
   ships behind that interface (opt-in: `agentlighthouse-core[scanners]` +
   `scanner.detect_secrets.enabled: true`) — its curated keyword/format
   detectors, not the noisy generic-entropy ones, and it is still pattern
@@ -870,8 +864,8 @@ statement; the compliance mappings defer to it.
   at startup. Hardened systemd / Windows service deployments are not shipped.
 - **L0 nftables enforcement** is proven in Docker (`internal: true` networks) and
   by unit tests, but has not been validated on a bare-metal Linux host.
-- **Pilot outcomes** — false-positive rate and zero-workflow-breakage — need a
-  real partner workload, and this has not had one yet.
+- **No false-positive rate is published.** It depends on the workload; measure
+  it in audit mode before enforcing.
 
 ## Contributing and Security Reporting
 
@@ -888,7 +882,7 @@ gap that is worse than described very much is.
 
 ## Testing
 
-- **888 automated tests** (`uv run pytest -q`): 876 pass in a standard
+- **897 automated tests** (`uv run pytest -q`): 885 pass in a standard
   environment, with 12 skipped (Postgres-backed mirror tests unless a live-server
   DSN is provided, plus Linux-only nftables/netns and POSIX-mode tests). A 9-test
   Playwright dashboard end-to-end suite lives in `frontend/`.
@@ -908,8 +902,8 @@ make cov                         # coverage report
 
 All four packages share one version (see `CHANGELOG.md`). Released container
 images are tagged with semantic-version and `latest` tags and published to
-`ghcr.io`, signed by digest. A formal public versioning and release-cadence policy is not yet
-documented; treat the current line as pre-1.0.
+`ghcr.io`, signed by digest. The current line is pre-1.0: a minor version may
+carry breaking changes, which the changelog marks as upgrade notes.
 
 ## FAQ
 

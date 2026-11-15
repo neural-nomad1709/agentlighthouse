@@ -1,4 +1,4 @@
-"""Regression tests for defects D6-D12 (product_strategy/DECISIONS.md §D).
+"""Regression tests for defects D6-D12.
 
 * **D6** — a non-streaming LLM reply with a ``strip`` verdict was receipted as
   redacted but returned to the agent unredacted.

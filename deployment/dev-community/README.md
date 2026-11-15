@@ -130,7 +130,8 @@ One-command path: `make pilot` (Linux/macOS) or
 unless both topology probes prove the boundary. The manual steps:
 
 1. Ensure `keys/admin_api_token` exists (compose mounts it as a secret);
-   `al init` + the Phase-5 manual test prep create it if needed.
+   `al init` and the preparation steps of
+   [manual tests 5](../../manual-tests/05-evidence-control.md) create it if needed.
 2. Bring the stack up — two one-shot probes must exit 0 before the agent
    sandbox starts:
 

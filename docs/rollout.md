@@ -60,8 +60,8 @@ following enforce in every mode — by design, with tests:
    check the computed level — `al-gov attest export <org>` must report
    AEL-2 or higher (enforcing). Audit mode structurally cannot produce this.
 3. Watch week one like a hawk: `BLOCKED` receipts are now user-visible
-   denials. The blueprint's success metric is zero workflow breakage in
-   balanced mode — only a real workload can prove it.
+   denials. The target is zero workflow breakage in
+   balanced mode, and only a real workload can show it.
 
 ### Stage 3 — strict (high-sensitivity workloads)
 

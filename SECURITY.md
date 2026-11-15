@@ -14,12 +14,12 @@ are signed, so they are evidence.
 Expect an acknowledgement within a few days. This is a single-maintainer project,
 so please size your expectations accordingly.
 
-## Known gaps
+## Documented limitations
 
 Before reporting, check whether what you found is already named in the
-**"What this does NOT do"** section of the [README](README.md). The known and
-documented limits are: the baseline scanners are regex and heuristics rather
-than the named ML engines; A2A sender identity is asserted rather than proven;
+**"What This Does Not Do"** section of the [README](README.md). The known and
+documented limits are: the scanners are pattern matching and heuristics, with no
+machine-learning judgement; A2A sender identity is asserted rather than proven;
 the forward proxy cannot see inside a TLS CONNECT tunnel; and L0 nftables
 enforcement has not been validated on bare-metal Linux.
 

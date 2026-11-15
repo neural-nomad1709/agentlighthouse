@@ -5,12 +5,9 @@ security and governance plane for AI agents. This guide takes you from a clean
 machine to a running, verified mediator: install, initialize, configure,
 integrate your agents, and independently verify the evidence it produces.
 
-Every command in this document was executed and verified on a Windows 11 host
-(Docker Desktop, Linux engine) against image
-`amitkala/agentlighthouse:v1.0` (the first Docker Hub build). Releases are now
-published only as `ghcr.io/neural-nomad1709/agentlighthouse`. Where a command is platform-specific or has a
-prerequisite, it is called out inline. See the [Verification matrix](#verification-matrix)
-at the end for exactly what was tested and how.
+Commands are written for a POSIX shell and run unchanged in PowerShell unless a
+variant is shown. Where a command is platform-specific or has a prerequisite,
+it is called out inline.
 
 - **Source:** <https://github.com/neural-nomad1709/agentlighthouse>
 - **Image:** `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0`
@@ -32,7 +29,6 @@ at the end for exactly what was tested and how.
 - [9. Validation](#9-validation)
 - [10. Platform notes and troubleshooting](#10-platform-notes-and-troubleshooting)
 - [Command reference](#command-reference)
-- [Verification matrix](#verification-matrix)
 
 ---
 
@@ -62,8 +58,8 @@ cd agentlighthouse
 uv sync
 ```
 
-`uv sync` resolves and installs the workspace (`al-core`, `al-verify`,
-`al-governance`) into a local `.venv`. All CLI entry points then run through
+`uv sync` resolves and installs the workspace (`agentlighthouse-core`,
+`agentlighthouse-verify`, `agentlighthouse-governance`) into a local `.venv`. All CLI entry points then run through
 `uv run`: `al`, `al-verify`, `al-gov`.
 
 ### 1.2 Container (GitHub Container Registry)
@@ -84,6 +80,18 @@ docker pull ghcr.io/neural-nomad1709/agentlighthouse@sha256:8592b6decc79f5ba2ef4
 > serve the control-plane API`). This is intended. Run the container through Docker Compose
 > (§[5.3](#53-full-topology-docker-compose)), which supplies the token as a
 > secret and wires the segregated network topology.
+
+### 1.3 From PyPI
+
+```bash
+pip install agentlighthouse-core          # `al` and `al-verify`
+pip install agentlighthouse-governance    # adds `al-gov`
+```
+
+The core wheel carries the shipped configs, the default-deny policy and the
+prebuilt dashboard. `al init` writes `configs/` and `policies/` into the
+working directory when they are absent. With a PyPI install, run the commands
+in this guide without the `uv run` prefix.
 
 ---
 
@@ -285,7 +293,7 @@ docker compose ps           # al-core should be "healthy"; probes exit 0
 docker compose down -v      # tear down and remove volumes
 ```
 
-Verified bring-up state:
+Expected state after bring-up:
 
 ```
 al-core               running (healthy)
@@ -419,37 +427,3 @@ uv run python examples/a2a-lab/demo.py                    # A2A card poisoning +
 | `uv run al-gov cost --org <slug>` | Per-key spend for an org |
 | `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0` | Download the published image |
 | `docker compose up -d` / `down -v` | Bring the sealed topology up / down |
-
----
-
-## Verification matrix
-
-Every command family below was executed during authoring. "Verified" = run with
-the expected result. Constraints are stated where a command is
-platform-specific or environment-dependent.
-
-| Command / family | Result |
-|---|---|
-| `uv --version`, `uv sync` | Verified — uv 0.11.20; workspace resolves (47 packages) |
-| `uv run al version` / `--help` | Verified — `al-core 0.1.0` |
-| `uv run al check` (audit, balanced, strict) | Verified — all three OK |
-| `uv run al scan` (block / strip / allow) | Verified — exit 3 / 2 / 0 respectively |
-| `uv run al policy check ... exec_shell` | Verified — `deny TOOL_NOT_ALLOWED` (exit 3) |
-| `uv run al init` | Verified — writes `.env`, `keys/` (0600), `data/` |
-| `uv run al keygen --force` | Verified — rotates key |
-| `uv run al healthz` | Verified — boots; `chain.verified = true` |
-| `uv run al identity issue` | Verified — issues `spiffe://...` + token |
-| `uv run al vkey issue` | Verified — issues `alk_...` with budgets |
-| `uv run al gateway` | Verified — serves `/healthz` 200 (tested on a free port) |
-| `uv run al export --verdict block` | Verified — emits ECS/MITRE NDJSON |
-| `uv run al-verify <ledger>` | Verified — `chain of 11 receipt(s) verified ... OK` |
-| `uv run al-gov org/user/attest/cost` | Verified — create, add, export+verify (AEL-2), cost |
-| `uv run python examples/tool-response-injection/demo.py` | Verified — `RELEASE GATE PASSED` (exit 0) |
-| `uv run al egress nftables --al-core-ip <ip>` | Verified (render). `--apply` requires Linux + root (not run here) |
-| `docker pull ghcr.io/neural-nomad1709/agentlighthouse:0.3.0` | Manifest resolves (digest `8592b6de…5fdc`, checked 2026-11-13). The rows below were run against the earlier `amitkala/agentlighthouse:v1.0` build |
-| `docker compose config` | Verified — topology valid |
-| `docker compose up -d` / `down -v` | Verified — al-core healthy, both probes exit 0, teardown clean |
-| bare `docker run <image>` | Verified fail-closed — refuses without admin token (use Compose) |
-| `git clone https://github.com/neural-nomad1709/agentlighthouse.git` | Pending the repo push — URL is the published source; clone works once the repo is public |
-| `npm --prefix frontend run build` (dashboard, native) | Node 20+ present; the container ships the dashboard prebuilt |
-| `make ...` | Not applicable on Windows (no `make`); use the `uv run` equivalents |

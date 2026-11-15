@@ -1,12 +1,11 @@
-# Phase 3 manual tests — Action Gate pt1 (tool policy + MCP mediation)
+# Manual tests 3: Action Gate (tool policy + MCP mediation)
 
 What you verify: identity-bound default-deny tool policy with argument
 constraints, MCP descriptor pinning (rug-pull detection) and tool-poisoning
-scans, and the SkillGuard for agent instruction files (a post-Phase-7
-hardening addition that lives at this layer).
+scans, and the SkillGuard for agent instruction files.
 
 HITL approval and taint escalation are exercised end-to-end by the automated
-suite and by the Phase 5 release-gate demo; they have no isolated manual CLI.
+suite and by the Guide 5 release-gate demo; they have no isolated manual CLI.
 
 ## Environment setup
 

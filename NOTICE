@@ -48,12 +48,16 @@ Runtime dependencies (see uv.lock for exact pinned versions + hashes):
   - typer, click          (MIT / BSD-3-Clause)           CLI
   - watchfiles            (MIT)                          config hot-reload
   - pyyaml                (MIT)                          config parsing
+  - regex                 (Apache-2.0 AND CNRI-Python)   learned-rule matching with a timeout
 
 Optional runtime dependencies (extras):
   - psycopg[binary]       (LGPL-3.0-or-later)            agentlighthouse-core[postgres]: the
     concurrent-writer evidence mirror. Kept OPTIONAL and imported lazily so a
     default (SQLite) deployment neither installs nor links it; AgentLighthouse
     calls it across the standard DB-API/psycopg interface only.
+  - detect-secrets        (Apache-2.0)                   agentlighthouse-core[scanners]: an
+    opt-in secrets adapter behind the Scanner interface. Not installed by
+    default.
 
 Dashboard (frontend/, built to static assets; Node is a build toolchain only):
   - react, react-dom      (MIT)                          fleet dashboard UI
@@ -65,16 +69,13 @@ Reference data:
     (public-domain reference wordlist). Embedded verbatim in
     core/al_core/detect/bip39_words.py for the seed-phrase scanner.
 
-Detection/memory adapters: as of Phase 7, AgentLighthouse ships **dependency-free
-baseline scanners** (regex + stdlib heuristics) behind the Scanner interface, so
-none of the named engines (LLM Guard, Gitleaks/detect-secrets, Presidio, OWASP
-AMG) are vendored or linked today, and none are listed here — an attribution for
-code we do not ship would be false. They remain swappable adapters behind the
-same interface; each will be added here, with its license, at the moment it is
-actually introduced.
+Detection/memory adapters: AgentLighthouse ships **dependency-free baseline
+scanners** (regex + stdlib heuristics) behind the Scanner interface. No
+third-party detection engine is vendored or linked by default, and none is
+listed here beyond the optional detect-secrets adapter above: an attribution
+for code that is not shipped would be false.
 
 --------------------------------------------------------------------------------
 Trademark
 --------------------------------------------------------------------------------
-"AgentLighthouse" is a working name and must be cleared for trademark before any
-public release.
+"AgentLighthouse" is a working name.

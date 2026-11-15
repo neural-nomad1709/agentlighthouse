@@ -1,4 +1,4 @@
-# Phase 1 manual tests — Edge Gate (L0 egress + L1 proxies)
+# Manual tests 1: Edge Gate (L0 egress + L1 proxies)
 
 What you verify: identity-gated fetch/CONNECT/reverse proxies, host/port
 default-deny, SSRF blocking that no allowlist can override, virtual keys, the

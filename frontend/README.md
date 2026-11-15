@@ -1,14 +1,12 @@
 # AgentLighthouse — Fleet Dashboard (`frontend/`)
 
 The governance observability dashboard: a progressive-disclosure view of the
-evidence ledger. This is the **Phase 6 fleet dashboard** built early — RBAC-aware
-and org-tenancy-scoped from day one, so the multi-org governance phase adds
-backend enforcement without a UI rewrite.
+evidence ledger. It is RBAC-aware and scoped by organization.
 
 - **License:** MIT. One canonical dashboard, no duplication.
 - **Stack:** Vite + React + TypeScript, built to static assets. Node is a
   build toolchain only — the built `dist/` is served by the Python control
-  plane on control-net, and is prebuilt into the container image. No emojis.
+  plane on control-net, and is prebuilt into the container image.
 
 ## Layout
 
@@ -77,7 +75,7 @@ Under Docker this is already wired: compose mounts the `al-data` volume into
 `al-control` at `/app/dataplane` and sets `AL_CONTROL__DATAPLANE_DIR`, and the
 image keeps the key under the data dir, so the default resolves.
 
-## RBAC & tenancy (Phase-6 ready)
+## RBAC & tenancy
 
 `GET /api/session` returns the caller's role (`admin`/`operator`/`viewer`), a
 **capability set** (`view`/`verify`/`approve`/`configure`), and the visible

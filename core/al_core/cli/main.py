@@ -1259,7 +1259,7 @@ def run(
     port: int = typer.Option(8888, "--port"),
     data_dir: Path = typer.Option(DEFAULT_DATA, "--data-dir"),
 ) -> None:
-    """Run the control-plane API (Phase 0: /healthz)."""
+    """Run the control-plane API."""
     import uvicorn
 
     from ..app import create_app

@@ -1,4 +1,4 @@
-# Phase 7 manual tests — Learning loop + A2A mediation (ASI07)
+# Manual tests 7: Learning loop + A2A mediation (ASI07)
 
 What you verify: the full learning round-trip (blocks -> mined candidate ->
 human-signed bundle -> generated regression test -> enforced rule that
@@ -10,7 +10,7 @@ interceptions (card poisoning, rug-pull drift, session smuggling).
 1. Complete the [common setup](README.md#common-environment-setup).
 2. Start from a clean `data/` (README reset steps) so exactly the seeded
    blocks are in the ledger.
-3. You need the agent identity flow from Phase 1: issue one with
+3. You need the agent identity flow from Guide 1: issue one with
    `uv run al identity issue acme tester` and record the token (`<TOKEN>`).
 4. Two terminals (gateway + requests) for the seeding step only.
 

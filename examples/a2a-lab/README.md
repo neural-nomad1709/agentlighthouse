@@ -32,5 +32,5 @@ Fully local: the demo builds a throwaway workspace in `examples/a2a-lab/run/`
 (gitignored) with its own dev signing key and ledger. Exit code 0 means every
 claim held. Coverage: OWASP ASI07 (insecure inter-agent communication).
 
-What a real multi-agent partner adds here is a *transport* (HTTP/gRPC), not new
-policy — the mediation, pinning, smuggling checks and receipts are the same.
+The demo exercises the mediation, pinning, smuggling checks and receipts with
+mock agents; it does not include a network transport between agents.

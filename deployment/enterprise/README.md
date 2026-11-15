@@ -13,24 +13,24 @@ which makes budget check-and-increment atomic across concurrent writers
 This tier builds ON the [mid-size](../mid-size/README.md) deployment — do
 that guide first; every step here is additive.
 
-## Honest constraints before you commit
+## Constraints to know before you commit
 
-- Hardening, compliance mappings, SBOM and signed images are in place, but
-  none of it has met a real partner workload yet; run this as a
-  design-partner posture with your own review.
+- Hardening, compliance mappings, SBOM and signed images are in place. No
+  false-positive rate is published; measure it on your own workload in audit
+  mode, and apply your own review.
 - The container image ships the core only; the governed control plane
-  (`al-gov serve`) runs natively on the control host today (step 4).
-- A2A mediation is an interface + tested mediator, not yet a wire transport;
+  (`al-gov serve`) runs natively on the control host (step 4).
+- A2A mediation is a tested mediator without a network transport;
   MCP HTTP upstreams handle JSON replies, not SSE streams (the README's
-  "What this does NOT do" section has the full list).
+  "What This Does Not Do" section has the full list).
 - Multiple `al-core` replicas share Postgres for budgets and queries, but
   each replica keeps its own signed JSONL chain (one writer per chain, by
   design) — evidence federation across chains is a dashboard concern. The
   dashboard federates on the **read** side: it attaches another plane's ledger
   read-only and merges plane-tagged receipts, verifying each chain separately
-  (`core/al_core/audit/pool.py`). Config exposes one such plane today
-  (`control.dataplane_dir`); federating N replicas is the same mechanism with a
-  longer list, and is not yet wired.
+  (`core/al_core/audit/pool.py`). Config exposes one such plane
+  (`control.dataplane_dir`); merging several replicas into one dashboard is
+  not supported.
 
 ## Linux deployment
 

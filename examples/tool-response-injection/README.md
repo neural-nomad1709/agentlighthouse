@@ -24,4 +24,4 @@ Checks (each asserted; any failure exits non-zero — **CI treats that as: no re
 `mock_server.py` is the hostile MCP server (dependency-free, newline-delimited
 JSON-RPC); it serves both the stdio and HTTP transports. The demo builds a
 throwaway workspace in `run/` (gitignored). Coverage: ASI01 (goal hijack via
-tool response), ASI02 (tool misuse), G1 (explainable intercept).
+tool response), ASI02 (tool misuse).

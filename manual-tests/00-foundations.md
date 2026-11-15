@@ -1,4 +1,4 @@
-# Phase 0 manual tests — Foundations (evidence-first)
+# Manual tests 0: Foundations (evidence-first)
 
 What you verify: workspace initialization, fail-closed config validation,
 signed hash-chained receipts, independent verification, tamper evidence, and
@@ -107,4 +107,4 @@ the mirror is a query surface.
 Remove-Item configs/_bad_test.yaml        # Linux: rm configs/_bad_test.yaml
 ```
 
-Optionally reset `data/` for the next phase document.
+Optionally reset `data/` for the next guide.

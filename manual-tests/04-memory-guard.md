@@ -1,4 +1,4 @@
-# Phase 4 manual tests — Memory Guard (L5, ASI06)
+# Manual tests 4: Memory Guard (L5, ASI06)
 
 What you verify: screened memory writes and reads, redaction, quarantine,
 protected-key integrity baselines with out-of-band tamper detection, and
@@ -58,7 +58,7 @@ uv run al memory get notes/deploy
 
 Expected: put exits 2; get delivers the value with
 `[REDACTED:aws-access-key]` in place of the credential, and the plaintext
-key appears nowhere in `data/memory.json` or the ledger (check as in Phase 2
+key appears nowhere in `data/memory.json` or the ledger (check as in Guide 2
 test 2.8).
 
 ### 4.4 Protected keys refuse untrusted writers
@@ -139,4 +139,4 @@ tagged ASI06.
 ## Cleanup
 
 Reset `data/` (README reset steps) — the tamper test deliberately dirtied the
-store, and later phases assume a coherent workspace.
+store, and later guides assume a coherent workspace.

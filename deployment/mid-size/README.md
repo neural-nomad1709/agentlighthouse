@@ -86,8 +86,7 @@ below.
    Leave `AL_ENV`/`AL_MODE` as shipped (`dev`/`balanced`): balanced mode is
    what enforces the gates; the boot-time egress self-test that `env: prod`
    additionally arms belongs on sealed agent hosts, not on the mediator
-   (which legitimately has egress). The full prod-env packaging pass is
-   Phase 8 scope.
+   (which legitimately has egress).
 
 5. Bring it up and demand the proofs:
 
@@ -127,8 +126,8 @@ below.
    `unverified` (amber); `BROKEN` (red) means signatures were checked and
    failed — treat that as tampering and escalate.
 
-9. Drill the kill switch once before going live (see the Phase 5 manual
-   tests, Part B) so the team has done it before an incident.
+9. Drill the kill switch once before going live (see [manual tests 5](../../manual-tests/05-evidence-control.md),
+   Part B) so the team has done it before an incident.
 
 10. Optional — run agent containers under gVisor (user-space kernel syscall
     sandbox). Install runsc on the host (`sudo runsc install`, reload

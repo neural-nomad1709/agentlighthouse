@@ -73,6 +73,13 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 - `al version`, `al-verify --version` and the API metadata report the
   installed package version (they said 0.1.0).
 - `al-core` now depends on `regex` (learned rules are compiled with it).
+- The manual test guides are renamed from `manual-tests/phase-N-<name>.md` to
+  `manual-tests/0N-<name>.md`.
+- Documentation: `docs/architecture.md`, `docs/owasp-mapping.md` and
+  `docs/demos.md` describe the product as shipped. Statements the code did not
+  back are removed (a WebSocket proxy, ledger checkpoints, webhook export,
+  circuit breakers, a `max_outbound_bytes` policy budget, named third-party
+  detection engines).
 - **Upgrade note:** the Python distributions are renamed `al-core` ->
   `agentlighthouse-core`, `al-verify` -> `agentlighthouse-verify` and
   `al-governance` -> `agentlighthouse-governance` (PyPI refuses the short
@@ -156,19 +163,19 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 ### Fixed
 - The HITL gate forgets approval requests two windows after they were filed,
   when every state is final. Before, its in-memory map grew without limit.
-- Human approval now executes (D1). Before, an approved request had no path
+- Human approval now executes. Before, an approved request had no path
   back to the call: every retry filed a new request. `/mcp` approvals also
   could never reach the data plane from the control plane.
 ### Security
 - MCP `tools/list`: two different descriptors under one tool name are both
   withheld and receipted (`TOOL_DESCRIPTOR_DRIFT`). Before, a poisoned twin
-  rode through on its clean twin's verdict (D2).
+  rode through on its clean twin's verdict.
 - MCP responses: a reply is relayed only if it answers an in-flight request,
   once. Duplicate or unknown ids are dropped and receipted, agents cannot reuse
-  an in-flight id, and non-object `tools/call` results are withheld (D3).
+  an in-flight id, and non-object `tools/call` results are withheld.
 - MCP server-initiated requests and notifications (`sampling/createMessage`,
   logging, progress) and error replies are content-scanned. Before, they
-  reached the agent unscanned (D3). HTTP `/mcp` filters batch (array) replies
+  reached the agent unscanned. HTTP `/mcp` filters batch (array) replies
   instead of returning them raw.
 - MCP replies are content-scanned whatever the method. `tools/call` results are
   scanned in full: embedded resources, `resource_link` descriptions,
@@ -177,11 +184,11 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
   withheld. Replies to `resources/read`, `prompts/get`, `initialize` (its
   `instructions`) and list methods are scanned too, and a blocked one becomes
   a JSON-RPC error. Before, only `type:"text"` tool-result blocks were read
-  (D4). A resource `uri` is scanned without its scheme, so `file://` resources
+ . A resource `uri` is scanned without its scheme, so `file://` resources
   do not trip the dangerous-scheme rule.
 - MCP `tools/call` is allowed only for a tool in the last `tools/list` the agent
   received. Before, a tool withheld as poisoned, drifted or ambiguous could
-  still be called by name (D5). The denial is `TOOL_NOT_ALLOWED` with rule
+  still be called by name. The denial is `TOOL_NOT_ALLOWED` with rule
   `mcp.tool_not_advertised`. Paginated lists accumulate, a list without a
   `cursor` replaces the set, and `notifications/tools/list_changed` clears it.
   A later page that withholds a name (a different twin of an earlier page's
@@ -206,7 +213,7 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
   peer that never answers cannot grow the session's memory.
 - Chain detector: a flagged session keeps blocking every exfil-category call.
   Before, it stopped after the first flag, and padding the history could lapse
-  the match (D10).
+  the match.
 
 ## [0.2.1] - 2026-09-27
 
@@ -239,8 +246,6 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
   `verify/` + `governance/` move as one version, tagged `vX.Y.Z`).
 
 ### Changed
-- `.gitignore`: anchor `/.internal/` to the repo root; ignore `/paper/*`
-  build output.
 - `README.md`: refresh test counts (711 total / 699 passing), document the
   detect-secrets adapter, drop "pending trademark clearance".
 - Root `pyproject.toml` version aligned with the workspace members (was

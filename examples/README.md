@@ -24,9 +24,8 @@ the mediator blocks the payload anyway, on the response, before the agent sees
 it. It also proves evidence portability the hard way, verifying the receipt
 chain in a subprocess where importing `al_core` is forced to raise `ImportError`.
 
-Demos 2 and 3 are not release gates, but they are the acceptance criteria for
-Phase 4 (memory guard) and Phase 7 (A2A harness) respectively, and they run in
-CI alongside demo 1.
+Demos 2 and 3 are not release gates, but they are the acceptance tests for the
+memory guard and for A2A mediation, and they run in CI alongside demo 1.
 
 ## Where they are used in code
 
@@ -65,11 +64,11 @@ substantiates it.
 ## Relationship to `manual-tests/`
 
 [`manual-tests/`](../manual-tests/README.md) is the human-operator counterpart:
-markdown checklists, one per build phase, for someone verifying the controls by
+markdown checklists, one per area, for someone verifying the controls by
 hand on a new machine. It does not reimplement these attacks — it *invokes*
-them. Phase 4 runs `make demo-memory`, Phase 5 runs `make demo`, and Phase 7
-runs `make demo-a2a` as steps inside their own guides, and Phase 3 defers its
-tool-policy cases to the Phase 5 demo.
+them. Guide 4 runs `make demo-memory`, guide 5 runs `make demo`, and guide 7
+runs `make demo-a2a` as steps of their own, and guide 3 defers its
+tool-policy cases to the guide 5 demo.
 
 So the split is: `examples/` owns the executable attacks (automated, CI-gated),
 `manual-tests/` owns the human procedure and borrows them. One implementation,

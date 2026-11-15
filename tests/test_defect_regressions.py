@@ -1,4 +1,4 @@
-"""Regression tests for six verified defects (product_strategy/DECISIONS.md §D).
+"""Regression tests for six verified defects.
 
 * **D1** — human approval never executed: an approved HITL request had no path
   back to the call, ``resume()`` was not bound to actor/tool/args, approvals

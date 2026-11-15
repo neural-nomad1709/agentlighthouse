@@ -1,4 +1,4 @@
-# Phase 5 manual tests — Evidence & Control (MCP transports, kill switch, SIEM)
+# Manual tests 5: Evidence & Control (MCP transports, kill switch, SIEM)
 
 What you verify: the release-gate demo (tool-response injection blocked on
 all three MCP transports), the kill switch from all sources, SIEM export

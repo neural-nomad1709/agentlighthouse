@@ -1,11 +1,11 @@
 # Compliance mappings
 
 Engineering planning aids that map AgentLighthouse mechanisms to the control
-frameworks a pilot's security review will ask about. **They are not legal
+frameworks a security review will ask about. **They are not legal
 opinions, not certifications, and not a substitute for your own assessment.**
 Every claim maps to a shipped, tested mechanism; where coverage is partial or
-absent, the mapping says so (the README's "What this does NOT do" section is the
-master honesty statement).
+absent, the mapping says so (the README's "What This Does Not Do" section is the
+authoritative statement of limits).
 
 | Framework | Document |
 |-----------|----------|
