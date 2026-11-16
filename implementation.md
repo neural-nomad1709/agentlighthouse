@@ -393,6 +393,7 @@ uv run python examples/a2a-lab/demo.py                    # A2A card poisoning +
   ```bash
   uv run al egress nftables --al-core-ip 10.0.0.2            # render (prints ruleset)
   uv run al egress nftables --al-core-ip 10.0.0.2 --apply    # apply (Linux, root)
+  uv run al egress nftables --agent-uid 1500                 # agent shares the host: confine its uid
   ```
 - **Dashboard "unverified" chain.** Pass `--dataplane-pubkey keys/mediator_ed25519.pub`
   so the dashboard can verify the gateway's chain rather than only display it.
@@ -419,7 +420,8 @@ uv run python examples/a2a-lab/demo.py                    # A2A card poisoning +
 | `uv run al run --config <cfg>` | Run the control-plane API |
 | `uv run al dashboard --data-dir ... --dataplane-dir ... --dataplane-pubkey ...` | Serve the evidence dashboard |
 | `uv run al export --verdict block` | Export the ledger as SIEM NDJSON |
-| `uv run al egress nftables --al-core-ip <ip> [--apply]` | Render / apply L0 egress ruleset (Linux) |
+| `uv run al egress nftables --al-core-ip <ip> [--apply]` | Render / apply L0 egress ruleset for an agent network namespace (Linux) |
+| `uv run al egress nftables --agent-uid <uid> [--apply]` | Render / apply L0 egress ruleset for an agent account on the mediator's host (Linux) |
 | `uv run al-verify <ledger> --pubkey <pub>` | Independently verify the receipt chain |
 | `uv run al-gov org create <slug>` | Create a tenant |
 | `uv run al-gov user add <subject> --org <slug> --role <role>` | Add a user |

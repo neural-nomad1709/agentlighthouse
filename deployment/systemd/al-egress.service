@@ -1,0 +1,27 @@
+# AgentLighthouse: confine the agent account, then prove it, before the
+# mediator starts. See README.md in this directory for the install steps.
+#
+# Runs as root (loading nftables rules needs CAP_NET_ADMIN). The rules stay
+# loaded when this unit stops: removing them would free the agent.
+
+[Unit]
+Description=AgentLighthouse egress confinement for the agent account
+# The proof below is a connection attempt. It only means something once the
+# host itself can reach the network.
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# 1. The agent account may reach the mediator's two ports on loopback
+#    (8080 forward proxy, 8443 gateway) and nothing else.
+ExecStart=/bin/sh -c 'exec /opt/agentlighthouse/venv/bin/al egress nftables --agent-uid "$$(id -u al-agent)" --port 8080 --port 8443 --apply'
+
+# 2. Proof: as the agent account, try to reach the internet directly. A
+#    connection that succeeds fails this unit, and al-core.service with it.
+ExecStart=/usr/bin/setpriv --reuid=al-agent --regid=al-agent --init-groups /opt/agentlighthouse/venv/bin/al egress selftest
+
+[Install]
+WantedBy=multi-user.target

@@ -146,11 +146,14 @@ from inside the sealed container network in Part B.)
 ### 1.10 nftables ruleset renders
 
 ```
-uv run al egress nftables
+uv run al egress nftables --al-core-ip 172.28.0.2
+uv run al egress nftables --agent-uid 1500
 ```
 
-Expected: the agent-netns default-deny nftables ruleset prints (render only;
-`--apply` is for a Linux agent host).
+Expected: the first prints the agent-netns default-deny ruleset (`policy
+drop`, al-core's address the only destination). The second prints the
+per-account ruleset (`meta skuid 1500`, loopback ports 8080 and 8443 only).
+Render only; `--apply` is for a Linux agent host.
 
 ### 1.11 Evidence check
 

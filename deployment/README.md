@@ -9,6 +9,10 @@ for both Windows and Linux.
 | Mid-size | [mid-size/](mid-size/README.md) | up to 10 | single-tenant (multi-org optional) | on-premise or self-managed cloud VM | SQLite (one writer per plane) |
 | Enterprise | [enterprise/](enterprise/README.md) | 10+ / multiple teams | multi-tenant (orgs, RBAC, signed attestation) | on-premise or self-managed private cloud, Linux | Postgres mirror (concurrent writers) |
 
+A fourth guide is not a tier: [systemd/](systemd/README.md) runs the mediator
+natively on one Linux host, with the agent account confined by nftables, for
+when agents cannot run in containers.
+
 ## Tenancy, cloud, and on-premise — stated plainly
 
 - **Every tier is self-hosted.** AgentLighthouse runs on infrastructure you

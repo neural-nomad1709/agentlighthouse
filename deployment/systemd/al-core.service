@@ -1,0 +1,56 @@
+# AgentLighthouse mediator (data plane): gateway on 127.0.0.1:8443, CONNECT
+# forward proxy on 127.0.0.1:8080. See README.md in this directory.
+
+[Unit]
+Description=AgentLighthouse mediator (data plane)
+# No confinement proof, no mediator.
+Requires=al-egress.service
+After=al-egress.service network-online.target
+Wants=network-online.target
+
+[Service]
+User=al-core
+Group=al-core
+
+# configs/, policies/ and keys/mediator_ed25519 are read relative to this
+# directory. The signing key belongs to al-core, mode 0400; the service
+# cannot rewrite it (ProtectSystem=strict below makes /etc read-only).
+WorkingDirectory=/etc/agentlighthouse
+ExecStart=/opt/agentlighthouse/venv/bin/al gateway --config configs/balanced.yaml --host 127.0.0.1 --port 8443 --data-dir /var/lib/agentlighthouse
+Restart=on-failure
+RestartSec=5
+
+# Optional provider keys (AL_GATEWAY__UPSTREAM__...), root-owned, mode 0600.
+EnvironmentFile=-/etc/agentlighthouse/al-core.env
+
+# Evidence: /var/lib/agentlighthouse, owned by al-core, closed to others.
+StateDirectory=agentlighthouse
+StateDirectoryMode=0700
+UMask=0077
+
+# Hardening. The limits match the container baseline.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+TasksMax=256
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

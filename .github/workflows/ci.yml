@@ -26,6 +26,18 @@ jobs:
       - name: Test suite
         run: uv run pytest -q
 
+      # The suite above runs unprivileged, so it skips these. They load real
+      # nftables rules into scratch network namespaces, which needs root. A
+      # skip here would mean nothing was enforced, so a skip fails the step.
+      - name: L0 enforcement tests (root + nftables)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends nftables
+          sudo env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest \
+            tests/test_egress_linux.py -q -rs -p no:cacheprovider | tee l0-tests.log
+          ! grep -q skipped l0-tests.log
+
       # The release gate. If this fails, there is no release.
       - name: Release gate (tool-response injection, all 3 MCP transports)
         if: runner.os != 'Windows'

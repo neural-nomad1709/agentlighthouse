@@ -12,7 +12,18 @@ source of truth; it is what `publish-image.yml` reads to tag the image.
 ## [Unreleased]
 
 ### Added
+- **Native Linux enforcement.** `al egress nftables --agent-uid <uid>` renders
+  (or applies) a ruleset that confines one account to the mediator's proxy
+  ports on loopback and drops everything else it sends; other accounts are
+  untouched. `deployment/systemd/` ships `al-egress.service` (applies the
+  ruleset, then proves it by running the self-test as the agent account) and
+  a hardened `al-core.service` that does not start without that proof.
+- CI runs the L0 enforcement tests as root with nftables on Linux.
+  `scripts/test-egress-linux.sh` and `scripts/test-systemd-units.sh` run the
+  same checks in a container from any host.
 ### Changed
+- `al egress nftables` takes exactly one of `--al-core-ip` or `--agent-uid`.
+  `--al-core-ip` behaves as before.
 ### Fixed
 ### Security
 

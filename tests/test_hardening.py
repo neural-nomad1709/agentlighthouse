@@ -257,3 +257,68 @@ def test_packages_report_the_released_version():
     assert al_core.__version__ == version
     assert al_verify.__version__ == version
     assert al_governance.__version__ == version
+
+
+# -- native Linux deployment (systemd units) ----------------------------------
+#
+# scripts/test-systemd-units.sh runs these units under a real systemd. That
+# needs a privileged container, so it is not part of the suite; these tests
+# keep the properties it proved from being edited away.
+
+SYSTEMD = ROOT / "deployment" / "systemd"
+
+
+def _unit_lines(name: str) -> list[str]:
+    text = (SYSTEMD / name).read_text(encoding="utf-8")
+    return [ln.strip() for ln in text.splitlines()
+            if ln.strip() and not ln.lstrip().startswith("#")]
+
+
+def test_mediator_unit_does_not_start_without_the_egress_proof():
+    unit = _unit_lines("al-core.service")
+    assert "Requires=al-egress.service" in unit
+    assert any(ln.startswith("After=") and "al-egress.service" in ln for ln in unit)
+
+
+def test_mediator_unit_runs_unprivileged_and_hardened():
+    unit = _unit_lines("al-core.service")
+    for line in (
+        "User=al-core",
+        "NoNewPrivileges=yes",
+        "CapabilityBoundingSet=",
+        "ProtectSystem=strict",
+        "ProtectHome=yes",
+        "PrivateTmp=yes",
+        "PrivateDevices=yes",
+        "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX",
+        "SystemCallFilter=@system-service",
+        "StateDirectoryMode=0700",
+        "UMask=0077",
+        # the container baseline's limits
+        "TasksMax=256",
+        "MemoryMax=1G",
+    ):
+        assert line in unit, line
+
+
+def test_mediator_unit_listens_on_loopback_on_the_ports_the_agent_may_reach():
+    start = next(ln for ln in _unit_lines("al-core.service") if ln.startswith("ExecStart="))
+    assert "--host 127.0.0.1" in start and "--port 8443" in start
+    apply = next(ln for ln in _unit_lines("al-egress.service") if "egress nftables" in ln)
+    # 8080 is gateway.forward_listen's default; 8443 is the gateway above.
+    assert re.findall(r"--port (\d+)", apply) == ["8080", "8443"]
+
+
+def test_egress_unit_applies_the_ruleset_then_proves_it_as_the_agent():
+    steps = [ln for ln in _unit_lines("al-egress.service") if ln.startswith("ExecStart=")]
+    assert len(steps) == 2
+    assert "egress nftables --agent-uid" in steps[0] and "--apply" in steps[0]
+    assert "id -u al-agent" in steps[0]
+    assert "setpriv --reuid=al-agent --regid=al-agent" in steps[1]
+    assert steps[1].endswith("al egress selftest")
+
+
+def test_egress_unit_never_unloads_the_ruleset():
+    unit = _unit_lines("al-egress.service")
+    assert "RemainAfterExit=yes" in unit
+    assert not any(ln.startswith(("ExecStop", "ExecStopPost")) for ln in unit)

@@ -11,7 +11,7 @@ independently verifiable evidence** of every decision it takes.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)
-![Tests](https://img.shields.io/badge/tests-888-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-912-brightgreen.svg)
 ![Evidence](https://img.shields.io/badge/evidence-Ed25519%20%2B%20RFC%208785-informational.svg)
 ![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 [![Image](https://img.shields.io/badge/image-ghcr.io%2Fneural--nomad1709%2Fagentlighthouse-2496ED.svg?logo=docker&logoColor=white)](https://github.com/neural-nomad1709/agentlighthouse/pkgs/container/agentlighthouse)
@@ -458,7 +458,8 @@ spec/         the receipt format (receipt-v1.md + JSON Schema)
 policies/     default-deny tool policy
 configs/      audit / balanced / strict profiles
 docs/         architecture, OWASP mapping, demos, rollout, compliance
-deployment/   dev-community / mid-size / enterprise guides (Windows + Linux)
+deployment/   dev-community / mid-size / enterprise guides (Windows + Linux),
+              systemd/ units for a native Linux host
 manual-tests/ manual verification guides
 examples/     tool-response-injection, memory-poison, a2a-lab demos
 tests/        automated test suite
@@ -615,7 +616,8 @@ Step-by-step guides for Windows and Linux, at all three sizes, are in
   on Windows — the dev-community tier. CI runs the suite and the demos on
   `windows-latest` as well as `ubuntu-latest`.
 - **A native run is advisory.** Outside the container topology nothing stops an
-  agent from skipping the mediator. When the egress bypass self-test is off
+  agent from skipping the mediator, unless the host confines the agent's
+  account (`deployment/systemd/`, Linux). When the egress bypass self-test is off
   (the default outside `env: prod`), startup logs `advisory mode` and the signed
   boot receipt carries the finding `egress.advisory_mode`.
 - **Every tier is self-hosted.** "Cloud" means your own IaaS VMs; there is no
@@ -624,8 +626,8 @@ Step-by-step guides for Windows and Linux, at all three sizes, are in
 ### Kubernetes
 
 Kubernetes and Helm manifests are **not shipped** in this repository. Supported
-deployment is Docker Compose, native (`uv`), and the probe-gated one-command
-pilot install (`make pilot`, or `scripts/pilot-install.ps1` on Windows). The
+deployment is Docker Compose, native (`uv`), systemd units for a native Linux
+host (`deployment/systemd/`), and the probe-gated one-command pilot install (`make pilot`, or `scripts/pilot-install.ps1` on Windows). The
 compose topology (segregated networks, boot probes, hardened baseline) is the
 reference for any orchestration you build.
 
@@ -860,11 +862,17 @@ this section.
 - **The forward proxy tunnels TLS opaquely.** It enforces on destination host,
   port, and pinned IP; it cannot see inside a CONNECT tunnel, so the content gate
   does not apply there.
-- **A native (non-container) run enforces nothing at the OS level.** It is
-  advisory: it mediates and receipts what agents send through it, and says so
-  at startup. Hardened systemd / Windows service deployments are not shipped.
-- **L0 nftables enforcement** is proven in Docker (`internal: true` networks) and
-  by unit tests, but has not been validated on a bare-metal Linux host.
+- **A native (non-container) run enforces nothing at the OS level unless you
+  add it.** By itself it is advisory: it mediates and receipts what agents
+  send through it, and says so at startup. On Linux, `deployment/systemd/`
+  ships units that confine an agent account to the mediator with nftables
+  and refuse to start the mediator without proof; the boot receipt still
+  reads advisory, because that proof is not in the signed ledger. A Windows
+  service deployment is not shipped.
+- **L0 nftables enforcement** is proven in Docker (`internal: true` networks),
+  in scratch network namespaces under root in CI, and for the systemd units
+  in a container that boots systemd. It has not been validated on a
+  bare-metal Linux host.
 - **No false-positive rate is published.** It depends on the workload; measure
   it in audit mode before enforcing.
 
@@ -883,8 +891,8 @@ gap that is worse than described very much is.
 
 ## Testing
 
-- **900 automated tests** (`uv run pytest -q`): 888 pass in a standard
-  environment, with 12 skipped (Postgres-backed mirror tests unless a live-server
+- **929 automated tests** (`uv run pytest -q`): 912 pass in a standard
+  environment, with 17 skipped (Postgres-backed mirror tests unless a live-server
   DSN is provided, plus Linux-only nftables/netns and POSIX-mode tests). A 9-test
   Playwright dashboard end-to-end suite lives in `frontend/`.
 - The **three demos run as acceptance tests** in the suite, so a demo cannot rot
