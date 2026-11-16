@@ -270,20 +270,43 @@ def egress_selftest(
 
 @egress_app.command("nftables")
 def egress_nftables(
-    al_core_ip: str = typer.Option(..., "--al-core-ip", help="al-core address on agent-net"),
-    ports: list[int] = typer.Option([8080, 8888], "--port", help="al-core proxy ports (repeatable)"),
-    no_dns: bool = typer.Option(False, "--no-dns", help="drop DNS-to-al-core rules too"),
+    al_core_ip: str = typer.Option(
+        None, "--al-core-ip", help="agent has its own netns: al-core address on agent-net"),
+    agent_uid: int = typer.Option(
+        None, "--agent-uid", help="agent shares this host with al-core: the agent's numeric uid"),
+    ports: list[int] = typer.Option(
+        None, "--port",
+        help="al-core proxy ports (repeatable) [default: 8080 8888 with "
+             "--al-core-ip, 8080 8443 with --agent-uid]"),
+    no_dns: bool = typer.Option(False, "--no-dns", help="drop DNS-to-al-core rules too (--al-core-ip only)"),
     apply: bool = typer.Option(False, "--apply", help="apply via `nft -f -` (Linux, NET_ADMIN)"),
 ) -> None:
-    """Render (or apply) the agent-netns default-deny nftables ruleset."""
+    """Render (or apply) a default-deny nftables ruleset for agents.
+
+    --al-core-ip: the whole agent network namespace may reach al-core only.
+    --agent-uid: on a host shared with al-core, that uid may reach al-core's
+    proxy ports on loopback only; other accounts are untouched.
+    """
     import subprocess
     import sys
 
-    from ..egress import render_ruleset
+    from ..egress import render_agent_uid_ruleset, render_ruleset
 
-    rules = render_ruleset(
-        al_core_ip=al_core_ip, proxy_ports=ports, allow_dns_to_al_core=not no_dns
-    )
+    if (al_core_ip is None) == (agent_uid is None):
+        raise _err("give exactly one of --al-core-ip or --agent-uid")
+    if agent_uid is not None:
+        try:
+            # The forward proxy and the gateway. Never the control-plane port:
+            # an agent must not reach that even on loopback.
+            rules = render_agent_uid_ruleset(
+                agent_uid=agent_uid, proxy_ports=ports or [8080, 8443])
+        except ValueError as exc:
+            raise _err(str(exc))
+    else:
+        rules = render_ruleset(
+            al_core_ip=al_core_ip, proxy_ports=ports or [8080, 8888],
+            allow_dns_to_al_core=not no_dns,
+        )
     if not apply:
         typer.echo(rules)
         return

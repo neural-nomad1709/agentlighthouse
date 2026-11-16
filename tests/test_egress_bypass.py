@@ -16,6 +16,7 @@ from al_core.egress import (
     EgressBypassError,
     parse_target,
     probe_bypass,
+    render_agent_uid_ruleset,
     render_ruleset,
     self_test_enabled,
 )
@@ -236,3 +237,53 @@ def test_ruleset_dns_only_via_al_core():
 def test_ruleset_without_dns():
     rules = render_ruleset(al_core_ip="172.28.0.2", allow_dns_to_al_core=False)
     assert "udp dport 53" not in rules
+
+
+# -- per-uid rendering (mediator and agent on one host) ----------------------------
+
+def test_agent_uid_ruleset_confines_only_the_agent_uid():
+    rules = render_agent_uid_ruleset(agent_uid=1500, proxy_ports=(8080, 8443))
+    assert 'meta skuid 1500 oifname "lo" tcp dport { 8080, 8443 } accept' in rules
+    assert "meta skuid 1500 counter drop" in rules
+    # Every other uid (the mediator included) keeps its egress.
+    assert "policy accept;" in rules
+    assert "policy drop;" not in rules
+    # Every rule is scoped to the agent uid; nothing else is matched.
+    rule_lines = [ln.strip() for ln in rules.splitlines()
+                  if ln.strip().endswith(("accept", "drop"))]
+    assert len(rule_lines) == 2
+    assert all(ln.startswith("meta skuid 1500 ") for ln in rule_lines)
+
+
+def test_agent_uid_ruleset_gives_the_agent_no_dns_and_no_reply_path():
+    rules = render_agent_uid_ruleset(agent_uid=1500, proxy_ports=(8080,))
+    assert "dport 53" not in rules
+    assert "established" not in rules
+
+
+def test_agent_uid_ruleset_replaces_itself_when_applied_again():
+    rules = render_agent_uid_ruleset(agent_uid=1500, proxy_ports=(8080,))
+    assert rules.splitlines()[:3] == [
+        "table inet al_egress_agent",
+        "delete table inet al_egress_agent",
+        "table inet al_egress_agent {",
+    ]
+
+
+def test_agent_uid_ruleset_is_a_separate_table_from_the_netns_one():
+    uid_rules = render_agent_uid_ruleset(agent_uid=1500, proxy_ports=(8080,))
+    netns_rules = render_ruleset(al_core_ip="172.28.0.2")
+    assert "table inet al_egress {" in netns_rules
+    assert "table inet al_egress {" not in uid_rules
+
+
+@pytest.mark.parametrize("uid", [0, -1, True, "1500", 1500.0, None])
+def test_agent_uid_ruleset_refuses_a_uid_it_cannot_confine(uid):
+    with pytest.raises(ValueError):
+        render_agent_uid_ruleset(agent_uid=uid, proxy_ports=(8080,))
+
+
+@pytest.mark.parametrize("ports", [(), (0,), (65536,), ("8080",), (True,)])
+def test_agent_uid_ruleset_refuses_bad_ports(ports):
+    with pytest.raises(ValueError):
+        render_agent_uid_ruleset(agent_uid=1500, proxy_ports=ports)

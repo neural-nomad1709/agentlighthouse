@@ -68,6 +68,35 @@ def test_egress_nftables_renders():
     assert "policy drop;" in r.stdout and "172.28.0.2" in r.stdout
 
 
+def test_egress_nftables_renders_the_per_uid_ruleset():
+    r = runner.invoke(app, ["egress", "nftables", "--agent-uid", "1500"])
+    assert r.exit_code == 0
+    # Defaults are the gateway's own ports, never the control-plane port.
+    assert 'meta skuid 1500 oifname "lo" tcp dport { 8080, 8443 } accept' in r.stdout
+    assert "8888" not in r.stdout
+
+
+def test_egress_nftables_per_uid_takes_explicit_ports():
+    r = runner.invoke(
+        app, ["egress", "nftables", "--agent-uid", "1500", "--port", "9000"])
+    assert r.exit_code == 0
+    assert "tcp dport { 9000 } accept" in r.stdout
+
+
+def test_egress_nftables_needs_exactly_one_topology():
+    r = runner.invoke(app, ["egress", "nftables"])
+    assert r.exit_code == 1 and "--al-core-ip or --agent-uid" in r.output
+
+    r = runner.invoke(
+        app, ["egress", "nftables", "--al-core-ip", "172.28.0.2", "--agent-uid", "1500"])
+    assert r.exit_code == 1 and "--al-core-ip or --agent-uid" in r.output
+
+
+def test_egress_nftables_refuses_uid_zero():
+    r = runner.invoke(app, ["egress", "nftables", "--agent-uid", "0"])
+    assert r.exit_code == 1
+
+
 # -- gateway lifespan wires the forward proxy ---------------------------------------
 
 def test_gateway_app_starts_forward_proxy(tmp_path):
